@@ -1,0 +1,11 @@
+{
+  "method": "Leiden",
+  "graph_type": "undirected_unweighted",
+  "resolution": 1.0,
+  "seed": 42,
+  "nodes": 2187952,
+  "edges": 2309258,
+  "clusters": 1078,
+  "largest_cluster_nodes": 6900,
+  "smallest_cluster_nodes": 231
+}
