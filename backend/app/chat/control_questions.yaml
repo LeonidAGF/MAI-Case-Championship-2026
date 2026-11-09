@@ -1,0 +1,43 @@
+# Stage 7 DoD: "В 10 контрольных вопросах ни одной выдуманной цифры, есть цитаты".
+# Run: python -m app.cli chat-eval --yes   (calls the LLM API — costs money)
+- id: q01
+  question: Какой индекс доступности у Махачкалы для семьи с детьми?
+  profile: family
+  expect_tools: [get_index]
+- id: q02
+  question: Где в Дагестане лучше всего с детскими садами среди сёл?
+  profile: family
+  expect_tools: [get_index]
+- id: q03
+  question: Сравни Нальчик и Владикавказ для пенсионера.
+  profile: pensioner
+  expect_tools: [compare_territories]
+- id: q04
+  question: Какие сильные и слабые стороны у Кисловодска?
+  profile: young_specialist
+  expect_tools: [get_index]
+- id: q05
+  question: Назови топ-5 сёл Чечни по медицине.
+  profile: pensioner
+  expect_tools: [get_index]
+- id: q06
+  question: Что изменится, если открыть ФАП в селе Ахты?
+  profile: family
+  expect_tools: [run_scenario]
+- id: q07
+  question: Сравни Махачкалу и Ахты.
+  profile: family
+  expect_tools: [compare_territories]
+  note: territories from different clusters — the assistant must explain why they are not compared
+- id: q08
+  question: Где в Ставропольском крае хуже всего с транспортом среди малых городов и райцентров?
+  profile: realtor
+  expect_tools: [get_index]
+- id: q09
+  question: Как изменится индекс сёл Курского округа, если пустить автобус до райцентра?
+  profile: family
+  expect_tools: [run_scenario]
+- id: q10
+  question: Сколько минут ехать до ближайшей больницы из Ведено?
+  profile: family
+  expect_tools: [get_index]

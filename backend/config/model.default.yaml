@@ -1,0 +1,110 @@
+# Index model configuration — CONTRACT between ML and backend.
+#
+# This file is the backend's FALLBACK, transcribed from the team report v3.0
+# (tables 2–5). The model itself is owned by ML: they keep their own YAML with the
+# same schema and point MODEL_CONFIG_PATH at it. Do not tune weights here.
+# Schema is validated at startup by app/modelcfg.py.
+
+version: "baseline-report-v3.0"
+
+subindices:
+  S1: {name: "Медицина", short_name: "Медицина", in_total: true}
+  S2: {name: "Образование", short_name: "Образование", in_total: true}
+  S3: {name: "Досуг и торговля", short_name: "Досуг", in_total: true}
+  S4: {name: "Транспортная связанность", short_name: "Транспорт", in_total: true}
+  S5: {name: "Работа и деловая активность", short_name: "Работа", in_total: true}
+  S6: {name: "Климат-комфорт", short_name: "Климат", in_total: true}
+  # S7 is a separate badge for the realtor mode, not part of the total (section 4.3).
+  S7: {name: "Привлекательность", short_name: "Привлекательность", in_total: false}
+
+# weight = weight of the feature inside its subindex (equal by default).
+# level = natural level of the data; settlements inherit municipality/region values.
+# time_based = value depends on the mobility mode (car / foot) -> feature_value.mode.
+features:
+  F01: {name: "Время до ближайшей больницы", unit: "мин", direction: lower_better, subindex: S1, time_based: true, source: "OSM amenity=hospital + OSRM"}
+  F02: {name: "Время до ближайшей поликлиники/амбулатории/ФАП", unit: "мин", direction: lower_better, subindex: S1, time_based: true, source: "OSM clinic, doctors + OSRM"}
+  F03: {name: "Мощность медицины: объектов в 30 мин", unit: "объектов", direction: higher_better, subindex: S1, time_based: true, source: "OSM + изохрона"}
+  F04: {name: "Время до ближайшей станции скорой помощи", unit: "мин", direction: lower_better, subindex: S1, source: "OSM emergency=ambulance_station + OSRM"}
+  F05: {name: "Время до ближайшего детского сада", unit: "мин", direction: lower_better, subindex: S2, time_based: true, source: "OSM amenity=kindergarten + OSRM"}
+  F06: {name: "Время до ближайшей школы", unit: "мин", direction: lower_better, subindex: S2, time_based: true, source: "OSM amenity=school + OSRM"}
+  F07: {name: "Время до ближайшего колледжа/вуза", unit: "мин", direction: lower_better, subindex: S2, time_based: true, source: "OSM college, university + OSRM"}
+  F08: {name: "Число школ в 15 мин (выбор)", unit: "шт", direction: higher_better, subindex: S2, time_based: true, source: "OSM + изохрона"}
+  F09: {name: "Плотность кафе/ресторанов в пешей доступности", unit: "шт", direction: higher_better, subindex: S3, source: "OSM cafe, restaurant"}
+  F10: {name: "Наличие кинотеатра/ДК/дома культуры", unit: "0/1 + время", direction: higher_better, subindex: S3, source: "OSM cinema, community_centre"}
+  F11: {name: "Спортивные объекты в 15 мин", unit: "шт", direction: higher_better, subindex: S3, time_based: true, source: "OSM leisure=sports_*"}
+  F12: {name: "Площадь парков в радиусе 15 мин", unit: "га", direction: higher_better, subindex: S3, time_based: true, source: "OSM leisure=park"}
+  F13: {name: "Наличие ТЦ/рынка", unit: "0/1 + время", direction: higher_better, subindex: S3, source: "OSM shop=mall, marketplace"}
+  F14: {name: "Время до регионального центра", unit: "мин", direction: lower_better, subindex: S4, time_based: true, source: "OSRM + матрица «Точно»"}
+  F15: {name: "Время до ближайшей ЖД-станции", unit: "мин", direction: lower_better, subindex: S4, time_based: true, source: "OSM railway=station + OSRM"}
+  F16: {name: "Время до ближайшего аэропорта", unit: "мин", direction: lower_better, subindex: S4, time_based: true, source: "OurAirports/Росавиация + OSRM"}
+  F17: {name: "Время до ближайшей автостанции", unit: "мин", direction: lower_better, subindex: S4, time_based: true, source: "OSM amenity=bus_station + OSRM"}
+  F18: {name: "Доля местных дорог вне норматива", unit: "%", direction: lower_better, subindex: S4, level: municipality, source: "Росстат: муниципальный транспорт"}
+  F19: {name: "Доля жителей без регулярного автобусного сообщения", unit: "%", direction: lower_better, subindex: S4, level: municipality, source: "Росстат: муниципальный транспорт"}
+  F20: {name: "Плотность юрлиц и ИП", unit: "шт/1000 чел.", direction: higher_better, subindex: S5, level: municipality, source: "ФНС: открытые данные"}
+  F21: {name: "Время до ближайшего города 50 тыс.+ (рынок труда)", unit: "мин", direction: lower_better, subindex: S5, time_based: true, source: "OSRM"}
+  F22: {name: "Оборот розничной торговли на душу", unit: "тыс. руб.", direction: higher_better, subindex: S5, level: municipality, source: "ЕМИСС"}
+  F23: {name: "Уровень безработицы муниципалитета", unit: "%", direction: lower_better, subindex: S5, level: municipality, source: "ЕМИСС"}
+  F24: {name: "Число дискомфортных дней (ниже −15 / выше +30 °C)", unit: "дней/год", direction: lower_better, subindex: S6, source: "Open-Meteo API"}
+  F25: {name: "Число дней с осадками выше 5 мм", unit: "дней/год", direction: lower_better, subindex: S6, source: "Open-Meteo API"}
+  F26: {name: "Средняя скорость ветра в холодный период", unit: "м/с", direction: lower_better, subindex: S6, source: "Open-Meteo API"}
+  F27: {name: "Миграционный прирост", unit: "чел./год", direction: higher_better, subindex: S7, level: municipality, source: "Росстат: демография"}
+  F28: {name: "Динамика населения за 5 лет", unit: "%", direction: higher_better, subindex: S7, level: municipality, source: "Росстат: перепись и оценка"}
+  F29: {name: "Вновь зарегистрированные юрлица и ИП", unit: "шт/год", direction: higher_better, subindex: S7, level: municipality, source: "ФНС"}
+  F30: {name: "Доходы бюджета на душу / ВРП на душу", unit: "тыс. руб.", direction: higher_better, subindex: S7, level: municipality, source: "ЕМИСС / Росстат"}
+
+# Section 4.1 + 5.3. Normalization is done inside the cluster only.
+clusters:
+  A:
+    name: "Городские территории"
+    description: "Население свыше 50 тыс., административные центры субъектов"
+    params: {winsor_lower: 0.01, winsor_upper: 0.99, min_size_for_minmax: 10, polyclinic_reachable_min: 15}
+  B:
+    name: "Промежуточные территории"
+    description: "Малые города, посёлки городского типа, райцентры"
+    params: {winsor_lower: 0.01, winsor_upper: 0.99, min_size_for_minmax: 10}
+  V:
+    name: "Сельские территории"
+    description: "Сёла и станицы"
+    params: {winsor_lower: 0.01, winsor_upper: 0.99, min_size_for_minmax: 10, polyclinic_reachable_min: 30}
+
+# Table 2. Weights of S1..S6 in percent (sum = 100). Filters not mentioned in the
+# report keep contract defaults (app/profiles/contract.py).
+presets:
+  family:
+    name: "Семья с детьми"
+    description: "Важны сад, школа и медицина рядом"
+    weights: {S1: 25, S2: 30, S3: 15, S4: 15, S5: 10, S6: 5}
+    filters: {family: children, medicine_threshold_min: 30}
+    key_thresholds: "Сад и школа ≤ 15 мин; порог медицины 30"
+  young_specialist:
+    name: "Молодой специалист"
+    description: "Работа и досуг важнее всего"
+    weights: {S1: 10, S2: 10, S3: 25, S4: 20, S5: 30, S6: 5}
+    filters: {family: single, pace: active}
+    key_thresholds: "Рынок труда ≤ 30 мин; досуг пешком"
+  pensioner:
+    name: "Пенсионер"
+    description: "Медицина рядом, без автомобиля, климат важен"
+    weights: {S1: 35, S2: 5, S3: 10, S4: 20, S5: 10, S6: 20}
+    filters: {mobility: no_car, medicine_threshold_min: 15, climate_sensitivity: high, pace: calm}
+    key_thresholds: "Поликлиника ≤ 15 мин; без авто"
+  remote_worker:
+    name: "Удалёнщик"
+    description: "Работа из дома, редкие поездки, климат важен"
+    weights: {S1: 15, S2: 15, S3: 15, S4: 15, S5: 20, S6: 20}
+    filters: {work: remote, travel_frequency: rare, climate_sensitivity: high}
+    key_thresholds: "ЖД/авиа редко; климат важен"
+  realtor:
+    name: "Риелтор / инвестор"
+    description: "Транспорт, экономика и бейдж привлекательности"
+    # As printed in table 2 of the report: the row sums to 90, not 100. The loader keeps
+    # these proportions and rescales to 100 with a warning — ML/team lead to confirm.
+    weights: {S1: 15, S2: 10, S3: 10, S4: 25, S5: 25, S6: 5}
+    filters: {realtor_mode: true}
+    key_thresholds: "Режим риелтора включён по умолчанию"
+
+# S7 badge thresholds (terciles of the 0–100 attractiveness score).
+attractiveness_badges:
+  - {code: growing, label: "Растущая", min_score: 66.7}
+  - {code: stable, label: "Стабильная", min_score: 33.3}
+  - {code: declining, label: "Снижающаяся", min_score: 0}
