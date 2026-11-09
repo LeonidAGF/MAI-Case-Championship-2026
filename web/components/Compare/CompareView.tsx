@@ -7,76 +7,115 @@ import { postCompare, CompareResponse } from '@/lib/api';
 export function CompareView({ ids }: { ids: number[] }) {
 	const profile = useAtlas((s) => s.profile);
 	const [data, setData] = useState<CompareResponse | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [loading, setLoading] = useState(false);
 
 	useEffect(() => {
-		if (ids.length < 2) return;
-		postCompare(ids, profile).then(setData).catch(console.error);
+		if (ids.length < 2) {
+			setData(null);
+			return;
+		}
+		setLoading(true);
+		setError(null);
+		postCompare(ids, profile)
+			.then(setData)
+			.catch((e) => setError(e.message || 'Ошибка при сравнении (возможно, выбраны разные кластеры)'))
+			.finally(() => setLoading(false));
 	}, [ids, profile]);
 
-	if (!data) return <div className="p-4">Загрузка...</div>;
+	if (ids.length < 2) return <div className="text-center p-8 text-gray-500">Выберите минимум две территории для сравнения.</div>;
+	if (loading) return <div className="text-center p-8 text-blue-600 animate-pulse">Считаем индексы...</div>;
+	if (error) return <div className="text-center p-8 text-red-600 bg-red-50 rounded-lg">{error}</div>;
+	if (!data) return null;
 
 	return (
-		<div className="p-4">
-			<h2 className="text-xl font-bold mb-4">Сравнение (Кластер: {data.cluster_name})</h2>
-			<div className="flex gap-4">
-				{data.items.map((r) => (
-					<div key={r.territory_id} className="flex-1 border rounded p-3 shadow-sm">
-						<div className="text-lg font-semibold">{r.name}</div>
-						<div className="text-3xl font-bold">{r.total.toFixed(1)}</div>
-						<SubindicesBar sub={r.subindices} />
-						{r.attractiveness && (
-							<div className="mt-2 text-xs">Привлекательность: {r.attractiveness.score} ({r.attractiveness.badge})</div>
-						)}
-					</div>
-				))}
+		<div className="space-y-8">
+			<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+				{data.items.map((r, idx) => {
+					const color = idx === 0 ? 'border-blue-500' : idx === 1 ? 'border-green-500' : 'border-red-500';
+					return (
+						<div key={r.territory_id} className={`bg-white rounded-2xl shadow-lg border-t-4 ${color} p-6 flex flex-col`}>
+							<div className="text-sm font-medium text-gray-500 mb-1">{data.cluster_name}</div>
+							<h3 className="text-xl font-bold text-gray-900 mb-4">{r.name}</h3>
+							
+							<div className="text-5xl font-black text-gray-800 mb-6">
+								{r.total.toFixed(1)}
+							</div>
+							
+							<div className="space-y-2 mt-auto">
+								{Object.entries(r.subindices).map(([key, val]) => (
+									<div key={key} className="flex items-center text-xs">
+										<span className="w-8 text-gray-500 font-mono">{key}</span>
+										<div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+											<div 
+												className={`h-full rounded-full ${idx === 0 ? 'bg-blue-500' : idx === 1 ? 'bg-green-500' : 'bg-red-500'}`} 
+												style={{ width: `${val || 0}%` }} 
+											/>
+										</div>
+										<span className="w-8 text-right font-medium">{val ? val.toFixed(0) : '—'}</span>
+									</div>
+								))}
+							</div>
+						</div>
+					);
+				})}
 			</div>
-			<Radar data={data} />
-		</div>
-	);
-}
 
-function SubindicesBar({ sub }: { sub: Record<string, number | null> }) {
-	return (
-		<div className="mt-2 space-y-1 text-xs">
-			{Object.entries(sub).map(([k, v]) => (
-				<div key={k} className="flex items-center gap-2">
-					<span className="w-6">{k}</span>
-					<div className="flex-1 h-1.5 bg-gray-100">
-						<div className="h-1.5 bg-blue-500" style={{ width: `${v ?? 0}%` }} />
-					</div>
-					<span>{v !== null ? v.toFixed(0) : '—'}</span>
+			<div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white p-6 rounded-2xl shadow-lg">
+				<div className="flex flex-col items-center justify-center">
+					<h3 className="text-lg font-bold text-gray-800 mb-4">Профиль территорий</h3>
+					<Radar data={data} />
 				</div>
-			))}
+				
+				<div className="flex flex-col justify-center space-y-4">
+					<h3 className="text-lg font-bold text-gray-800 border-b pb-2">Ключевые различия</h3>
+					{data.summary.map((text, i) => (
+						<div key={i} className="flex gap-3 text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">
+							<span className="text-blue-500 font-bold">💡</span>
+							<p>{text}</p>
+						</div>
+					))}
+				</div>
+			</div>
 		</div>
 	);
 }
 
 function Radar({ data }: { data: CompareResponse }) {
 	const { axes, series } = data.radar;
-	const cx = 150, cy = 150, R = 120;
+	const cx = 200, cy = 200, R = 140;
 	
 	const angle = (i: number) => (Math.PI * 2 * i) / axes.length - Math.PI / 2;
+	
 	const point = (i: number, val: number) => {
 		const r = (val / 100) * R;
 		return [cx + r * Math.cos(angle(i)), cy + r * Math.sin(angle(i))];
 	};
+	
 	const colors = ['#2563eb', '#16a34a', '#dc2626'];
 
 	return (
-		<svg viewBox="0 0 300 300" className="w-72 h-72 mt-6 mx-auto">
-			{[25,50,75,100].map((ring) => (
+		<svg viewBox="0 0 400 400" className="w-full max-w-sm">
+			{[25, 50, 75, 100].map((ring) => (
 				<polygon key={ring}
 					points={axes.map((_: any, i: number) => point(i, ring).join(',')).join(' ')}
-					fill="none" stroke="#e5e7eb" />
+					fill="none" stroke="#e5e7eb" strokeDasharray={ring === 100 ? "none" : "4 4"} />
 			))}
+		
 			{axes.map((l: any, i: number) => {
-				const [x, y] = point(i, 108);
-				return <text key={l.code} x={x} y={y} textAnchor="middle" className="text-xs" fill="#6b7280">{l.code}</text>;
+				const [x, y] = point(i, 115);
+				return (
+					<g key={l.code}>
+						<line x1={cx} y1={cy} x2={point(i, 100)[0]} y2={point(i, 100)[1]} stroke="#e5e7eb" />
+						<text x={x} y={y} textAnchor="middle" className="text-xs font-medium" fill="#6b7280">{l.name}</text>
+					</g>
+				);
 			})}
+		
 			{series.map((r: any, idx: number) => (
 				<polygon key={r.territory_id}
 					points={r.values.map((v: number | null, i: number) => point(i, v ?? 0).join(',')).join(' ')}
-					fill={colors[idx]} fillOpacity={0.15} stroke={colors[idx]} />
+					fill={colors[idx]} fillOpacity={0.15} stroke={colors[idx]} strokeWidth={2} />
 			))}
 		</svg>
 	);

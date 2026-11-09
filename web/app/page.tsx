@@ -1,10 +1,10 @@
-// apps/web/app/page.tsx
 'use client';
 
 import { AtlasMap } from '@/components/Map/AtlasMap';
 import { TerritoryCard } from '@/components/Map/TerritoryCard';
 import { ProfilePicker } from '@/components/Profile/ProfilePicker';
 import { ShareButton } from '@/components/ShareButton/ShareButton';
+import { ChatWidget } from '@/components/Chat/ChatWidget';
 import Link from 'next/link';
 
 export default function Home() {
@@ -12,9 +12,8 @@ export default function Home() {
 		<main className="relative w-screen h-screen overflow-hidden bg-gray-100">
 			<AtlasMap />
 			<TerritoryCard />
-			
+		
 			<header className="absolute top-4 left-4 right-4 flex justify-between items-start z-10 pointer-events-none">
-				
 				<div className="flex gap-2 pointer-events-auto bg-white/90 backdrop-blur p-2 rounded-xl shadow-lg border border-gray-100">
 					<ProfilePicker />
 					<div className="w-px bg-gray-200 mx-1"></div>
@@ -27,6 +26,8 @@ export default function Home() {
 					<Link href="/whatif" className="text-gray-500 hover:text-black cursor-pointer transition">Что если</Link>
 				</nav>
 			</header>
+
+			<ChatWidget />
 		</main>
 	);
 }

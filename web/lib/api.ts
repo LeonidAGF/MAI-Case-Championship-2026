@@ -206,3 +206,49 @@ export async function fetchTerritoriesGeoJSON() {
 	if (!res.ok) throw new Error('Failed to load GeoJSON');
 	return res.json();
 }
+
+export async function streamChat(
+	messages: { role: 'user' | 'assistant'; content: string }[],
+	profile: Profile,
+	onChunk: (text: string) => void
+) {
+	const res = await fetch(`${API}/chat`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ messages, profile }),
+	});
+
+	if (!res.ok) {
+		const err = await res.json().catch(() => ({}));
+		throw new Error(err.message || `Ошибка чата: ${res.status}`);
+	}
+	if (!res.body) throw new Error('Нет тела ответа');
+
+	const reader = res.body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+
+		buffer += decoder.decode(value, { stream: true });
+		
+		const lines = buffer.split('\n');
+		buffer = lines.pop() || '';
+
+		for (const line of lines) {
+			if (line.startsWith('data: ')) {
+				const dataStr = line.slice(6).trim();
+				if (!dataStr || dataStr === '[DONE]') continue;
+				
+				try {
+					const data = JSON.parse(dataStr);
+					if (data.delta) {
+						onChunk(data.delta);
+					}
+				} catch {}
+			}
+		}
+	}
+}

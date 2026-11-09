@@ -15,8 +15,9 @@ export const useAtlas = create<AtlasState>((set) => ({
 	selectedTerritoryId: null,
 	
 	setProfile: (p) => {
-		persistProfile(p);
-		set({ profile: { ...p } });
+		const nextProfile = JSON.parse(JSON.stringify(p));
+		persistProfile(nextProfile);
+		set({ profile: nextProfile });
 	},
 	
 	patchFilters: (f) =>

@@ -4,12 +4,13 @@ import { useEffect, useRef } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useAtlas } from '@/lib/store';
-import { fetchClusterIndex, fetchTerritoriesGeoJSON } from '@/lib/api';
+import { API } from '@/lib/api';
+import { encodeProfile } from '@/lib/profile';
 
 maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
 
 const COLOR_STOPS: [number, string][] = [
-  	[0, '#f7fbff'], [30, '#c6dbef'], [55, '#6baed6'], [75, '#2171b5'], [100, '#08306b'],
+  [0, '#f7fbff'], [30, '#c6dbef'], [55, '#6baed6'], [75, '#2171b5'], [100, '#08306b'],
 ];
 
 export function AtlasMap() {
@@ -29,39 +30,31 @@ export function AtlasMap() {
 			zoom: 6.5,
 		});
 
-		map.current.on('load', async () => {
-		if (!map.current) return;
-			try {
-				const geojson = await fetchTerritoriesGeoJSON();
-				
-				map.current.addSource('territories', { type: 'geojson', data: geojson });
-				
-				map.current.addLayer({
-					id: 'territories-fill',
-					type: 'fill',
-					source: 'territories',
-					paint: { 'fill-color': '#eeeeee', 'fill-opacity': 0.6, 'fill-outline-color': '#ffffff' }
-				});
-
-				map.current.addLayer({
-					id: 'territories-label',
-					type: 'symbol',
-					source: 'territories',
-					layout: { 'text-field': ['get', 'name'], 'text-size': 11 },
-					paint: { 'text-color': '#333333', 'text-halo-color': '#ffffff', 'text-halo-width': 1 }
-				});
-			} catch (e) {
-				console.error("Ошибка загрузки GeoJSON:", e);
-			}
+		map.current.on('load', () => {
+			if (!map.current) return;
+			
+			map.current.addSource('settlements', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+			
+			map.current.addLayer({
+				id: 'settlements-circle',
+				type: 'circle',
+				source: 'settlements',
+				paint: {
+					'circle-radius': 5,
+					'circle-color': '#eeeeee',
+					'circle-stroke-width': 1,
+					'circle-stroke-color': '#ffffff'
+				}
+			});
 		});
 
-		map.current.on('click', 'territories-fill', (e) => {
+		map.current.on('click', 'settlements-circle', (e) => {
 			const id = e.features?.[0]?.properties?.id;
 			if (id != null) selectTerritory(Number(id));
 		});
 
-		map.current.on('mouseenter', 'territories-fill', () => { if (map.current) map.current.getCanvas().style.cursor = 'pointer'; });
-		map.current.on('mouseleave', 'territories-fill', () => { if (map.current) map.current.getCanvas().style.cursor = ''; });
+		map.current.on('mouseenter', 'settlements-circle', () => { if (map.current) map.current.getCanvas().style.cursor = 'pointer'; });
+		map.current.on('mouseleave', 'settlements-circle', () => { if (map.current) map.current.getCanvas().style.cursor = ''; });
 
 		return () => { map.current?.remove(); map.current = null; };
 	}, [selectTerritory]);
@@ -74,34 +67,31 @@ export function AtlasMap() {
 
 		(async () => {
 			try {
-				const [a, b, v] = await Promise.all([
-					fetchClusterIndex('A', profile),
-					fetchClusterIndex('B', profile),
-					fetchClusterIndex('V', profile),
-				]);
-				if (cancelled) return;
+				const q = new URLSearchParams({ level: 'settlement', with_index: 'true', p: encodeProfile(profile) });
+				const res = await fetch(`${API}/territories/geojson?${q}`);
+				if (!res.ok) throw new Error('Failed to load GeoJSON');
+				const geojson = await res.json();
+				
+				if (cancelled || !mapCur) return;
 
-				const scores: Record<number, number> = {};
-				[...a.items, ...b.items, ...v.items].forEach((r) => { scores[r.territory_id] = r.total; });
+				if (mapCur.getSource('settlements')) {
+					(mapCur.getSource('settlements') as maplibregl.GeoJSONSource).setData(geojson);
+				}
 
-				const apply = () => {
-					if (!mapCur.getLayer('territories-fill')) {
-						mapCur.once('load', apply);
-						return;
+				const matchExpr: any = ['match', ['get', 'id']];
+				geojson.features.forEach((f: any) => {
+					const total = f.properties.total;
+					if (total != null) {
+						matchExpr.push(f.properties.id, colorFor(total));
 					}
-					
-					const matchExpr: any = ['match', ['get', 'id']];
-					Object.entries(scores).forEach(([id, s]) => {
-						matchExpr.push(Number(id), colorFor(s));
-					});
-					matchExpr.push('#eeeeee');
+				});
+				matchExpr.push('#eeeeee');
 
-					mapCur.setPaintProperty('territories-fill', 'fill-color', matchExpr);
-				};
-
-				apply(); 
+				if (mapCur.getLayer('settlements-circle')) {
+					mapCur.setPaintProperty('settlements-circle', 'circle-color', matchExpr);
+				}
 			} catch (e) {
-				console.error("Ошибка при перекраске:", e);
+				console.error("Ошибка при загрузке точек:", e);
 			}
 		})();
 

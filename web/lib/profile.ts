@@ -2,21 +2,20 @@ import { Profile, DEFAULT_PROFILE } from '@/types/profile';
 
 const STORAGE_KEY = 'atlas:profile';
 const URL_PARAM = 'p';
-
+	
 function toBase64Url(str: string): string {
-	const b64 =
-		typeof window === 'undefined'
-		? Buffer.from(str, 'utf-8').toString('base64')
-		: btoa(unescape(encodeURIComponent(str)));
+	const utf8Bytes = new TextEncoder().encode(str);
+	const binString = Array.from(utf8Bytes, (byte) => String.fromCharCode(byte)).join('');
+	const b64 = btoa(binString);
 	return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function fromBase64Url(s: string): string {
 	const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
 	const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
-	return typeof window === 'undefined'
-		? Buffer.from(padded, 'base64').toString('utf-8')
-		: decodeURIComponent(escape(atob(padded)));
+	const binString = atob(padded);
+	const bytes = Uint8Array.from(binString, (char) => char.charCodeAt(0));
+	return new TextDecoder().decode(bytes);
 }
 
 export function encodeProfile(p: Profile): string {
@@ -63,11 +62,7 @@ export function writeProfileToStorage(p: Profile): void {
 }
 
 export function resolveInitialProfile(): Profile {
-	return (
-		readProfileFromUrl() ??
-		readProfileFromStorage() ??
-		DEFAULT_PROFILE
-	);
+	return readProfileFromUrl() ?? readProfileFromStorage() ?? DEFAULT_PROFILE;
 }
 
 export function persistProfile(p: Profile): void {
