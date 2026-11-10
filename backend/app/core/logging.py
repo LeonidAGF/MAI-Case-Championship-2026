@@ -43,5 +43,5 @@ def configure_logging(level: str = "INFO", log_dir: Path | None = None) -> None:
         file_handler.setFormatter(formatter)
         file_handler._atlas = True
         root.addHandler(file_handler)
-    for name in ("httpx", "httpx2", "anthropic", "asyncio"):
+    for name in ("httpx", "httpx2", "asyncio"):
         logging.getLogger(name).setLevel(max(logging.WARNING, root.level))

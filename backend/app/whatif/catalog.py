@@ -3,9 +3,29 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+# Labels of `kind` values for UI forms (GET /whatif/scenarios -> kinds).
+KIND_LABELS = {
+    "hospital": "Больница",
+    "clinic": "Поликлиника / амбулатория",
+    "fap": "ФАП (фельдшерско-акушерский пункт)",
+    "ambulance": "Станция скорой помощи",
+    "kindergarten": "Детский сад",
+    "school": "Школа",
+    "college": "Колледж",
+    "university": "Филиал вуза",
+    "railway_station": "ЖД-платформа / станция",
+    "cafe": "Кафе / ресторан",
+    "cinema": "Кинотеатр",
+    "community_centre": "Дом культуры",
+    "sports": "Спортивный объект",
+    "park": "Парк",
+    "mall": "Торговый центр",
+    "marketplace": "Рынок",
+}
 
 # Rough bounding box of the North Caucasus Federal District (with margin).
 LAT = {"ge": 40.5, "le": 47.0}
@@ -125,6 +145,18 @@ class ScenarioDef:
     def params_schema(self) -> dict[str, Any]:
         return self.params_model.model_json_schema()
 
+    @property
+    def target(self) -> Literal["point", "municipality"]:
+        """What the user picks: a point (lat/lon) or a municipal district (municipality_id)."""
+        return "municipality" if "municipality_id" in self.params_model.model_fields else "point"
+
+    def kind_options(self) -> list[dict[str, str]] | None:
+        field = self.params_model.model_fields.get("kind")
+        values = get_args(field.annotation) if field else ()
+        if len(values) < 2:
+            return None
+        return [{"value": v, "label": KIND_LABELS.get(v, v)} for v in values]
+
 
 CATALOG: dict[str, ScenarioDef] = {
     d.code: d
@@ -133,7 +165,8 @@ CATALOG: dict[str, ScenarioDef] = {
                     "Новый медицинский объект: время до него по дорогам (OSRM) или аналитически",
                     W1Params, {"lat": 42.39, "lon": 47.08, "kind": "fap"}),
         ScenarioDef("W2", "Закрытие больницы (ремонт, карантин)", "remove_poi", "graph", ("F01", "F02", "F03", "F04"),
-                    "Объект исключается: время растёт до следующего ближайшего",
+                    "Объект исключается: время растёт до следующего ближайшего. Без слоя POI объект считается "
+                    "находящимся в указанной точке, а время до следующего оценивается через соседние НП",
                     W2Params, {"lat": 43.03, "lon": 44.68, "kind": "hospital"}),
         ScenarioDef("W3", "Открытие детского сада/школы", "add_poi", "graph", ("F05", "F06", "F08"),
                     "Новый объект образования в точке", W3Params, {"lat": 42.39, "lon": 47.08, "kind": "school"}),

@@ -229,15 +229,24 @@ class CompareResponse(BaseModel):
     profile: ProfileOut
 
 
+class KindOption(BaseModel):
+    value: str
+    label: str
+
+
 class ScenarioInfo(BaseModel):
     code: str
     name: str
     type: str
     method: str
+    target: Literal["point", "municipality"] = Field(
+        description="point — нужны lat/lon (W2, W8: или poi_id); municipality — нужен municipality_id"
+    )
+    kinds: list[KindOption] | None = Field(None, description="Варианты kind с подписями; null — выбора нет")
     affects: list[str]
     description: str
     params_schema: dict[str, Any]
-    example: dict[str, Any]
+    example: dict[str, Any] = Field(description="Рабочий пример params (municipality_id — реальный район из базы)")
 
 
 class WhatIfRequest(BaseModel):

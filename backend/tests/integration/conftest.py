@@ -62,6 +62,10 @@ def test_settings() -> Settings:
         osrm_car_url="",
         osrm_foot_url="",
         data_dir=REPO_DIR / "data",
+        # Never reach the real GigaChat from tests (Settings also reads backend/.env): fakes are injected per test.
+        gigachat_credentials=None,
+        gigachat_model="GigaChat-3-Pro",
+        gigachat_temperature=None,
     )
 
 
