@@ -143,6 +143,47 @@ async def test_whatif_flow(client) -> None:  # noqa: ANN001
     assert any("OSRM" in w for w in graph_pref["warnings"])  # degrades to analytical with a warning
 
 
+async def test_every_catalog_example_runs(client) -> None:  # noqa: ANN001
+    """The frontend builds requests from GET /whatif/scenarios: each example must be runnable as is."""
+    catalog = (await client.get("/whatif/scenarios")).json()
+    by_code = {s["code"]: s for s in catalog}
+    assert by_code["W1"]["target"] == "point" and by_code["W6"]["target"] == "municipality"
+    assert {k["value"] for k in by_code["W3"]["kinds"]} == {"kindergarten", "school"} and by_code["W5"]["kinds"] is None
+    assert {"value": "fap", "label": "ФАП (фельдшерско-акушерский пункт)"} in by_code["W1"]["kinds"]
+    muni = by_code["W6"]["example"]["municipality_id"]
+    assert (await client.get(f"/territories/{muni}")).json()["level"] == "municipality"
+    for s in catalog:
+        r = await client.post("/whatif/run", json={"scenario_code": s["code"], "params": s["example"], "profile": "family"})
+        body = r.json()
+        assert r.status_code == 200, (s["code"], body)
+        assert body["affected"] > 0, (s["code"], body["warnings"])
+        deltas = [x["delta"] for x in body["results"]]
+        if s["code"] == "W2":
+            assert max(deltas) <= 0 and body["losers"]  # closing only hurts
+        else:
+            assert min(deltas) >= 0 and body["winners"], s["code"]  # opening/improving never hurts
+
+
+async def test_close_hospital_without_poi_layer(client) -> None:  # noqa: ANN001
+    akhty = await territory_id(client, "Ахты")
+    c = akhty["centroid"]
+    r = await client.post("/whatif/run", json={"scenario_code": "W2", "params": {"lat": c["lat"], "lon": c["lon"], "radius_km": 30}})
+    body = r.json()
+    assert r.status_code == 200, body
+    assert body["method_used"] == "analytical" and any("слоя POI" in w for w in body["warnings"])
+    changed = {ch["feature_code"] for res in body["results"] for ch in res["changes"]}
+    assert changed <= {"F01", "F03"} and "F01" in changed
+    assert all(ch["after"] >= ch["before"] for res in body["results"] for ch in res["changes"] if ch["feature_code"] == "F01")
+    missing = await client.post("/whatif/run", json={"scenario_code": "W2", "params": {"poi_id": 999999}})
+    assert missing.status_code == 422 and missing.json()["code"] == "poi_not_found"
+    region = (await client.get("/regions")).json()[0]["id"]
+    wrong = await client.post("/whatif/run", json={"scenario_code": "W7", "params": {"municipality_id": region}})
+    assert wrong.status_code == 422 and "субъект" in wrong.json()["message"]
+    assert wrong.json()["details"][0]["loc"] == ["municipality_id"]
+    extra = await client.post("/whatif/run", json={"scenario_code": "W3", "params": {"lat": c["lat"], "lon": c["lon"], "kind": "fap"}})
+    assert extra.status_code == 422 and extra.json()["details"][0]["loc"] == ["kind"]
+
+
 async def test_profiles(client) -> None:  # noqa: ANN001
     presets = (await client.get("/profiles/presets")).json()
     assert [p["id"] for p in presets] == ["family", "young_specialist", "pensioner", "remote_worker", "realtor"]

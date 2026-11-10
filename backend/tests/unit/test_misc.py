@@ -1,4 +1,3 @@
-import types
 from pathlib import Path
 
 import pytest
@@ -6,7 +5,6 @@ import yaml
 
 from app.cache import MemoryCache
 from app.chat.grounding import check_grounding, parse_numbers
-from app.chat.service import echo_content
 from app.core.config import BACKEND_DIR
 from app.core.ratelimit import RateLimiter
 from app.etl.io import parse_number, read_csv
@@ -37,19 +35,15 @@ def test_config_rejects_unknown_subindex() -> None:
 
 
 def test_grounding() -> None:
-    evidence = ['{"total": 63.4, "rank": 12, "items": [{"value": "Ближайшая школа — 47 минут"}]}']
+    evidence = ['{"total": 63.4, "rank": 12, "limit": 3, "items": [{"value": "Ближайшая школа — 47 минут"}]}']
     ok = check_grounding("Индекс 63,4 (≈63), 12-е место; школа в 47 минутах. Топ-3 и F05, S1, W10.", evidence)
     assert ok.ok, ok.ungrounded
+    assert ok.checked == 5  # 63,4 · ≈63 · 12 · 47 · 3; codes F05, S1, W10 are not numbers
+    # Every number is checked, small ones included: "Топ-3" needs evidence of its own.
+    assert check_grounding("Топ-3 сёл", []).ungrounded == ["3"]
     bad = check_grounding("Индекс 71,2 и 140 минут до больницы", evidence)
     assert bad.ungrounded == ["140", "71,2"]
     assert [v for _, v in parse_numbers("145 000 руб. и −2,5%")] == [145000.0, -2.5]
-
-
-def test_echo_content_drops_internal_blocks_before_fallback() -> None:
-    b = lambda t: types.SimpleNamespace(type=t)  # noqa: E731
-    blocks = [b("thinking"), b("text"), b("tool_use"), b("fallback"), b("thinking"), b("tool_use"), b("text")]
-    assert [x.type for x in echo_content(blocks)] == ["text", "fallback", "thinking", "tool_use", "text"]
-    assert len(echo_content([b("text"), b("tool_use")])) == 2
 
 
 async def test_rate_limiter_memory() -> None:

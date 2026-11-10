@@ -2,7 +2,18 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
 EARTH_RADIUS_KM = 6371.0088
+
+
+def haversine_km_many(lon: float, lat: float, lons: np.ndarray, lats: np.ndarray) -> np.ndarray:
+    """Distances (km) from one point to many points."""
+    p1, p2 = math.radians(lat), np.radians(lats)
+    dp = p2 - p1
+    dl = np.radians(lons) - math.radians(lon)
+    a = np.sin(dp / 2) ** 2 + math.cos(p1) * np.cos(p2) * np.sin(dl / 2) ** 2
+    return 2 * EARTH_RADIUS_KM * np.arcsin(np.minimum(1.0, np.sqrt(a)))
 
 
 def haversine_km(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
