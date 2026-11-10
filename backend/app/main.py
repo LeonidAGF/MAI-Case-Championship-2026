@@ -3,21 +3,26 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.api.routes import chat, compare, explain, health, index, profiles, reference, territories, whatif
+from app.api.routes import chat, compare, explain, health, index, knowledge, profiles, reference, territories, whatif
 from app.container import Container, build_container
 from app.core.config import Settings, get_settings
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
+from app.core.metrics import HTTP_DURATION, HTTP_INFLIGHT, HTTP_REQUESTS, collect_data_metrics, exposition, mark_worker_dead
+
+log = logging.getLogger(__name__)
 
 DESCRIPTION = """
 Индекс доступности территорий СКФО: балл 0–100 и шесть субиндексов под профиль
@@ -39,6 +44,7 @@ TAGS = [
     {"name": "profiles", "description": "Пресеты и кодирование профиля в ссылку"},
     {"name": "reference", "description": "Справочники и полнота данных"},
     {"name": "chat", "description": "Чат-ассистент (фича №2, SSE)"},
+    {"name": "knowledge", "description": "База знаний, векторный и полнотекстовый поиск"},
     {"name": "system", "description": "Служебные эндпоинты"},
 ]
 
@@ -63,21 +69,56 @@ class TimingMiddleware:
         await self.app(scope, receive, send_wrapper)
 
 
+class MetricsMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["path"] == "/metrics":
+            await self.app(scope, receive, send)
+            return
+        started = time.perf_counter()
+        method = scope["method"]
+        status = 500
+        HTTP_INFLIGHT.inc()
+
+        async def send_wrapper(message: Message) -> None:
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        finally:
+            route = getattr(scope.get("route"), "path", "unmatched")
+            elapsed = time.perf_counter() - started
+            HTTP_REQUESTS.labels(method, route, str(status)).inc()
+            HTTP_DURATION.labels(method, route).observe(elapsed)
+            HTTP_INFLIGHT.dec()
+            if route != "/healthz":
+                log.info("http_request", extra={"method": method, "route": route, "status": status, "duration_ms": round(elapsed * 1000, 1)})
+
+
 def create_app(container_factory: Callable[[Settings], Container] | None = None) -> FastAPI:
     settings = get_settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ANN202
-        configure_logging(settings.log_level)
+        configure_logging(settings.log_level, settings.log_dir)
         container = (container_factory or build_container)(settings)
         app.state.container = container
         warmup = asyncio.create_task(container.warmup()) if settings.warmup_on_start else None
+        collector = asyncio.create_task(collect_data_metrics(container))
         try:
             yield
         finally:
+            collector.cancel()
+            await asyncio.gather(collector, return_exceptions=True)
             if warmup is not None and not warmup.done():
                 warmup.cancel()
             await container.close()
+            mark_worker_dead()
 
     app = FastAPI(
         title="Атлас доступности территорий СКФО — API",
@@ -95,8 +136,14 @@ def create_app(container_factory: Callable[[Settings], Container] | None = None)
         expose_headers=["X-Process-Time", "Retry-After"],
     )
     app.add_middleware(TimingMiddleware)
+    app.add_middleware(MetricsMiddleware)
     install_error_handlers(app)
-    for module in (health, territories, index, explain, compare, whatif, profiles, reference, chat):
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        body, content_type = exposition()
+        return Response(content=body, media_type=content_type)
+
+    for module in (health, territories, index, explain, compare, whatif, profiles, reference, knowledge, chat):
         app.include_router(module.router)
     return app
 

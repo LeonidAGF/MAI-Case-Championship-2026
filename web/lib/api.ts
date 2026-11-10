@@ -210,12 +210,13 @@ export async function fetchTerritoriesGeoJSON() {
 export async function streamChat(
 	messages: { role: 'user' | 'assistant'; content: string }[],
 	profile: Profile,
-	onChunk: (text: string) => void
+	onChunk: (text: string) => void,
+	onCitations: (sources: { title: string; url: string | null }[]) => void
 ) {
 	const res = await fetch(`${API}/chat`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ messages, profile }),
+		body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), profile }),
 	});
 
 	if (!res.ok) {
@@ -227,28 +228,28 @@ export async function streamChat(
 	const reader = res.body.getReader();
 	const decoder = new TextDecoder();
 	let buffer = '';
+	const consume = (block: string) => {
+		const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7);
+		const payload = block.split('\n').filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n');
+		if (!event || !payload) return;
+		const data = JSON.parse(payload);
+		if (event === 'delta') onChunk(data.text);
+		if (event === 'citations') onCitations(data.sources ?? []);
+		if (event === 'error') throw new Error(data.message || 'Ошибка ассистента');
+	};
 
 	while (true) {
 		const { done, value } = await reader.read();
 		if (done) break;
 
-		buffer += decoder.decode(value, { stream: true });
-		
-		const lines = buffer.split('\n');
-		buffer = lines.pop() || '';
-
-		for (const line of lines) {
-			if (line.startsWith('data: ')) {
-				const dataStr = line.slice(6).trim();
-				if (!dataStr || dataStr === '[DONE]') continue;
-				
-				try {
-					const data = JSON.parse(dataStr);
-					if (data.delta) {
-						onChunk(data.delta);
-					}
-				} catch {}
-			}
+		buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+		let boundary = buffer.indexOf('\n\n');
+		while (boundary >= 0) {
+			consume(buffer.slice(0, boundary));
+			buffer = buffer.slice(boundary + 2);
+			boundary = buffer.indexOf('\n\n');
 		}
 	}
+	buffer += decoder.decode();
+	if (buffer.trim()) consume(buffer);
 }

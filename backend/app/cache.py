@@ -12,6 +12,8 @@ import time
 from collections import OrderedDict
 from typing import Any
 
+from app.core.metrics import CACHE_DEGRADATIONS, CACHE_LOOKUPS
+
 log = logging.getLogger(__name__)
 
 
@@ -32,7 +34,9 @@ class MemoryCache:
         return value
 
     async def get_json(self, key: str) -> Any | None:
-        return self._alive(key)
+        value = self._alive(key)
+        CACHE_LOOKUPS.labels("memory", "hit" if value is not None else "miss").inc()
+        return value
 
     async def set_json(self, key: str, value: Any, ttl: int) -> None:
         self._data[key] = (time.monotonic() + ttl, value)
@@ -82,6 +86,7 @@ class RedisCache:
 
     def _fail(self, exc: Exception) -> None:
         if self._usable():
+            CACHE_DEGRADATIONS.inc()
             log.warning("Redis unavailable, using in-process cache for %.0fs: %s", self.cooldown_s, exc)
         self._down_until = time.monotonic() + self.cooldown_s
 
@@ -93,6 +98,7 @@ class RedisCache:
         except Exception as exc:  # noqa: BLE001 - any redis/network error degrades
             self._fail(exc)
             return await self.fallback.get_json(key)
+        CACHE_LOOKUPS.labels("redis", "hit" if raw is not None else "miss").inc()
         return None if raw is None else json.loads(raw)
 
     async def set_json(self, key: str, value: Any, ttl: int) -> None:

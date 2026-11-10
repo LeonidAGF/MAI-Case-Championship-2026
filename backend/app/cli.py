@@ -92,7 +92,26 @@ async def cmd_seed(args: argparse.Namespace) -> Any:
     out = {"reference": await cmd_seed_reference(args), "territories": await cmd_load_territories(args)}
     if args.demo_features:
         out["demo_features"] = await cmd_demo(args)
+    out["knowledge"] = await cmd_seed_knowledge(args)
     return out
+
+
+async def cmd_seed_knowledge(_: argparse.Namespace) -> Any:
+    from app.chat.catalog import builtin_documents
+    from app.chat.retriever import make_embedder
+    from app.etl.knowledge import load_documents
+
+    model = get_settings().embeddings_model
+    embedder = make_embedder(model)
+    if model and embedder is None:
+        raise RuntimeError(f"Embedding model {model!r} is configured but unavailable")
+    return await _in_transaction(
+        "knowledge", "atlas-builtin",
+        lambda session: load_documents(
+            session, builtin_documents(_cfg()), source="atlas-builtin", replace=True,
+            embedder=embedder, file="active model configuration",
+        ),
+    )
 
 
 async def cmd_demo(_: argparse.Namespace) -> Any:
@@ -158,7 +177,7 @@ async def cmd_load_knowledge(args: argparse.Namespace) -> Any:
 
     embedder = make_embedder(get_settings().embeddings_model) if args.embed else None
     if args.embed and embedder is None:
-        sys.stderr.write("embeddings unavailable (set EMBEDDINGS_MODEL, pip install -e .[embeddings]); using FTS only\n")
+        raise RuntimeError("--embed requires EMBEDDINGS_MODEL and the embeddings dependency")
     return await _in_transaction(
         "knowledge", args.file,
         lambda s: load_knowledge(s, Path(args.file), source=args.source, replace=args.replace, embedder=embedder),
@@ -276,6 +295,7 @@ def build_parser() -> argparse.ArgumentParser:
     kn.add_argument("--source")
     kn.add_argument("--replace", action="store_true")
     kn.add_argument("--embed", action="store_true")
+    sub.add_parser("seed-knowledge", help="replace the model-methodology knowledge catalog with vector embeddings")
 
     sub.add_parser("coverage", help="data completeness report (JSON)")
     oa = sub.add_parser("export-openapi", help="write the OpenAPI contract for the frontend")
@@ -298,6 +318,7 @@ ASYNC_COMMANDS = {
     "load-stats": cmd_load_stats,
     "load-od-matrix": cmd_load_od,
     "load-knowledge": cmd_load_knowledge,
+    "seed-knowledge": cmd_seed_knowledge,
     "coverage": cmd_coverage,
     "chat-eval": cmd_chat_eval,
 }

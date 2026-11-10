@@ -1,0 +1,16 @@
+loki.source.file "api" {
+  targets = [
+    { __path__ = "/var/log/atlas/api-*.jsonl", job = "atlas", service = "api" },
+  ]
+  file_match {
+    enabled = true
+    sync_period = "10s"
+  }
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

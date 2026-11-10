@@ -84,6 +84,7 @@ async def test_tool_loop_grounded_answer(client, container) -> None:  # noqa: AN
     assert done["grounding"]["ok"] is True and done["stop_reason"] == "end_turn"
     cites = next(d for n, d in events if n == "citations")["sources"]
     assert any("Атлас" in s["title"] for s in cites)
+    assert any(n == "delta" and "Индекс Махачкалы" in d["text"] for n, d in events)
 
     first = fake.messages.calls[0]  # request shape per the Claude API guidance
     assert first["model"] == "claude-opus-5-5" and first["fallbacks"] == "default"
@@ -104,6 +105,7 @@ async def test_ungrounded_number_is_flagged(client, container) -> None:  # noqa:
     r = await client.post("/chat", json={"messages": [{"role": "user", "content": "Сколько до больницы в Ведено?"}]})
     done = parse_sse(r.text)[-1][1]
     assert done["grounding"]["ok"] is False and "137" in done["grounding"]["ungrounded"]
+    assert "137" not in "".join(d["text"] for n, d in parse_sse(r.text) if n == "delta")
 
 
 async def test_scenario_tool_and_cross_cluster(client, container) -> None:  # noqa: ANN001

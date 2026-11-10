@@ -23,12 +23,12 @@ dependencies = [
     "numpy>=2.0",
     "pyarrow>=17",
     "anthropic>=2.0,<3",
+    "prometheus-client>=0.22,<1",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.24"]
-# Optional: vector retrieval for the chat knowledge base (heavy: pulls torch).
-embeddings = ["sentence-transformers>=3"]
+embeddings = ["fastembed>=0.8,<0.9"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
