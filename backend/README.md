@@ -15,6 +15,15 @@
 
 ## Быстрый старт
 
+### Frontend
+```bash
+cd web
+npm install      - зависимости (если нет)
+npm run dev		 - запуск
+```
+
+### Backend
+
 Мониторинг Prometheus, Grafana и Loki запускается вместе с API; [инструкция и панели](observability/README.md).
 
 ```bash

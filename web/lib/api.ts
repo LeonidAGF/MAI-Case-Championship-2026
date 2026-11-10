@@ -3,10 +3,21 @@ import { encodeProfile } from './profile';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
+export class ApiError extends Error {
+	code?: string;
+	details?: any[];
+	constructor(message: string, code?: string, details?: any[]) {
+		super(message);
+		this.name = 'ApiError';
+		this.code = code;
+		this.details = details;
+	}
+}
+
 async function json<T>(res: Response): Promise<T> {
 	if (!res.ok) {
 		const err = await res.json().catch(() => ({}));
-		throw new Error(err.message || `API Error: ${res.status}`);
+		throw new ApiError(err.message || `API Error: ${res.status}`, err.code, err.details);
 	}
 	return res.json();
 }
@@ -153,17 +164,46 @@ export interface WhatIfResult {
 	changes: any[];
 }
 
+export interface ScenarioKind {
+	value: string;
+	label: string;
+}
+
+export interface ScenarioInfo {
+	code: string;
+	name: string;
+	description: string;
+	target: 'point' | 'municipality';
+	kinds: ScenarioKind[] | null;
+	params_schema: any;
+	example: Record<string, any>;
+}
+
+export interface WhatIfBrief {
+	territory_id: number;
+	name: string;
+	delta: number;
+}
+
 export interface WhatIfResponse {
 	run_id: number;
 	scenario_code: string;
 	scenario_name: string;
 	method_used: string;
 	params: any;
-	plan: any[] | null;
+	plan: { scenario_code: string, params: any, reason: string }[] | null;
 	affected: number;
-	results: WhatIfResult[];
-	winners: any[];
-	losers: any[];
+	results: {
+		territory_id: number;
+		name: string;
+		total_before: number;
+		total_after: number;
+		delta: number;
+		delta_subindices: Record<string, number>;
+		changes: { feature_code: string, label: string, unit: string, before: number, after: number, delta_points: number, text: string }[];
+	}[];
+	winners: WhatIfBrief[];
+	losers: WhatIfBrief[];
 	summary: any;
 	explanation: string;
 	warnings: string[];
@@ -205,6 +245,20 @@ export async function fetchTerritoriesGeoJSON() {
 	const res = await fetch(`${API}/territories/geojson?level=settlement`);
 	if (!res.ok) throw new Error('Failed to load GeoJSON');
 	return res.json();
+}
+
+export async function fetchScenarios() {
+  	return json<ScenarioInfo[]>(await fetch(`${API}/whatif/scenarios`));
+}
+
+export async function fetchTerritories(params: { level?: string; q?: string; limit?: number; parent_id?: number }) {
+	const q = new URLSearchParams();
+	if (params.level) q.append('level', params.level);
+	if (params.q) q.append('q', params.q);
+	if (params.limit) q.append('limit', String(params.limit));
+	if (params.parent_id) q.append('parent_id', String(params.parent_id));
+	
+	return json<{ items: TerritoryBrief[] }>(await fetch(`${API}/territories?${q}`));
 }
 
 export async function streamChat(
