@@ -19,21 +19,52 @@ router = APIRouter(tags=["what-if"])
 log = logging.getLogger(__name__)
 
 
-@router.get("/whatif/scenarios", response_model=list[ScenarioInfo], summary="Каталог сценариев W1–W10")
-async def scenarios() -> list[ScenarioInfo]:
-    return [
-        ScenarioInfo(
-            code=d.code,
-            name=d.name,
-            type=d.type,
-            method=d.method,
-            affects=list(d.affects),
-            description=d.description,
-            params_schema=d.params_schema(),
-            example=d.example,
+async def _example_municipality(session: AsyncSession) -> int | None:
+    """A real district for the examples: the one around the W1 example point, else the first one."""
+    point = CATALOG["W1"].example
+    row = (
+        await session.execute(
+            text(
+                """
+                SELECT id FROM territory
+                WHERE level = 'municipality' AND geom IS NOT NULL
+                  AND ST_Contains(geom, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))
+                LIMIT 1
+                """
+            ),
+            {"lon": point["lon"], "lat": point["lat"]},
         )
-        for d in CATALOG.values()
-    ]
+    ).scalar_one_or_none()
+    if row is None:
+        row = (
+            await session.execute(text("SELECT id FROM territory WHERE level = 'municipality' ORDER BY id LIMIT 1"))
+        ).scalar_one_or_none()
+    return row
+
+
+@router.get("/whatif/scenarios", response_model=list[ScenarioInfo], summary="Каталог сценариев W1–W10")
+async def scenarios(session: AsyncSession = Depends(get_session)) -> list[ScenarioInfo]:
+    municipality = await _example_municipality(session)
+    out = []
+    for d in CATALOG.values():
+        example = dict(d.example)
+        if "municipality_id" in example and municipality is not None:
+            example["municipality_id"] = municipality
+        out.append(
+            ScenarioInfo(
+                code=d.code,
+                name=d.name,
+                type=d.type,
+                method=d.method,
+                target=d.target,
+                kinds=d.kind_options(),
+                affects=list(d.affects),
+                description=d.description,
+                params_schema=d.params_schema(),
+                example=example,
+            )
+        )
+    return out
 
 
 @router.post(

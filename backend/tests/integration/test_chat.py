@@ -1,53 +1,34 @@
-"""Chat orchestration with a scripted fake Anthropic client (no network, no cost)."""
+"""Chat orchestration with a scripted fake GigaChat client (no network, no cost) and the real tools."""
 
 import json
-from types import SimpleNamespace
 
 import pytest
 
 pytestmark = pytest.mark.integration
 
 
-class FakeStream:
-    def __init__(self, message, texts):  # noqa: ANN001
-        self.message, self.texts = message, texts
+class FakeGigaChat:
+    """Each script step gets the request payload and returns a chat completion."""
 
-    async def __aenter__(self):  # noqa: ANN204
-        return self
-
-    async def __aexit__(self, *exc):  # noqa: ANN002, ANN204
-        return False
-
-    def __aiter__(self):  # noqa: ANN204
-        async def gen():  # noqa: ANN202
-            for t in self.texts:
-                yield SimpleNamespace(type="text", text=t)
-
-        return gen()
-
-    async def get_final_message(self):  # noqa: ANN201
-        return self.message
-
-
-class FakeMessages:
     def __init__(self, script):  # noqa: ANN001
-        self.script = script
-        self.calls = []
+        self.script, self.payloads = script, []
 
-    def stream(self, **kwargs):  # noqa: ANN003, ANN201
-        self.calls.append(kwargs)
-        texts, blocks, stop = self.script.pop(0)(kwargs)
-        usage = SimpleNamespace(input_tokens=100, output_tokens=20)
-        return FakeStream(SimpleNamespace(content=blocks, stop_reason=stop, usage=usage), texts)
-
-
-class FakeClient:
-    def __init__(self, script):  # noqa: ANN001
-        self.messages = FakeMessages(script)
-        self.beta = SimpleNamespace(messages=self.messages)
+    async def chat(self, payload: dict) -> dict:
+        self.payloads.append(payload)
+        return self.script.pop(0)(payload)
 
     async def close(self) -> None:
         pass
+
+
+def completion(content: str = "", finish: str = "stop", **message) -> dict:  # noqa: ANN003
+    return {"choices": [{"message": {"role": "assistant", "content": content, **message}, "index": 0, "finish_reason": finish}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}}
+
+
+def call(name: str, arguments: dict, state: str | None = None) -> dict:
+    extra = {"functions_state_id": state} if state else {}
+    return completion("", "function_call", function_call={"name": name, "arguments": arguments}, **extra)
 
 
 def parse_sse(raw: str) -> list[tuple[str, dict]]:
@@ -58,87 +39,98 @@ def parse_sse(raw: str) -> list[tuple[str, dict]]:
     return events
 
 
-def last_tool_result(kwargs) -> dict:  # noqa: ANN001
-    return json.loads(kwargs["messages"][-1]["content"][0]["content"])
+def last_result(payload: dict) -> dict:
+    message = payload["messages"][-1]
+    assert message["role"] == "function"
+    return json.loads(message["content"])
 
 
-async def test_tool_loop_grounded_answer(client, container) -> None:  # noqa: ANN001
-    def round1(kwargs):  # noqa: ANN001, ANN202
-        tool = SimpleNamespace(type="tool_use", id="tu_1", name="get_index", input={"territory": "Махачкала"})
-        return ["Смотрю данные. "], [SimpleNamespace(type="text", text="Смотрю данные. "), tool], "tool_use"
+@pytest.fixture
+def gigachat(container):  # noqa: ANN001, ANN201
+    def use(script):  # noqa: ANN001, ANN202
+        container.chat._gigachat = FakeGigaChat(script)
+        return container.chat._gigachat
 
-    def round2(kwargs):  # noqa: ANN001, ANN202
-        res = last_tool_result(kwargs)
-        answer = f"Индекс Махачкалы — {str(res['total']).replace('.', ',')} из 100, место {res['rank']} из {res['cluster_size']}."
-        return [answer], [SimpleNamespace(type="text", text=answer)], "end_turn"
+    yield use
+    container.chat._gigachat = None
 
-    fake = FakeClient([round1, round2])
-    container.chat._client = fake
+
+async def test_tool_loop_grounded_answer(client, gigachat) -> None:  # noqa: ANN001
+    def round1(payload: dict) -> dict:
+        return call("get_index", {"territory": "Махачкала"}, state="s-1")
+
+    def round2(payload: dict) -> dict:
+        assert payload["messages"][-2]["functions_state_id"] == "s-1"
+        res = last_result(payload)
+        return completion(f"Индекс Махачкалы — {str(res['total']).replace('.', ',')} из 100, "
+                          f"место {res['rank']} из {res['cluster_size']}.")
+
+    fake = gigachat([round1, round2])
     r = await client.post("/chat", json={"messages": [{"role": "user", "content": "Какой индекс у Махачкалы?"}], "profile": "family"})
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
     events = parse_sse(r.text)
     names = [e[0] for e in events]
-    assert names[0] == "meta" and names[-1] == "done"
+    assert events[0] == ("meta", {"model": "GigaChat-3-Pro", "profile": "family"}) and names[-1] == "done"
     assert ("tool_call", "get_index") in [(n, d.get("name")) for n, d in events]
     done = events[-1][1]
-    assert done["grounding"]["ok"] is True and done["stop_reason"] == "end_turn"
+    assert done["grounding"]["ok"] is True and done["stop_reason"] == "stop"
+    assert done["usage"] == {"input_tokens": 200, "output_tokens": 40}
     cites = next(d for n, d in events if n == "citations")["sources"]
     assert any("Атлас" in s["title"] for s in cites)
-    assert any(n == "delta" and "Индекс Махачкалы" in d["text"] for n, d in events)
+    answer = next(d["text"] for n, d in events if n == "delta")
+    assert answer.startswith("Внимание: в Атласе сейчас синтетические демо-данные") and "Индекс Махачкалы" in answer
 
-    first = fake.messages.calls[0]  # request shape per the Claude API guidance
-    assert first["model"] == "claude-opus-5-5" and first["fallbacks"] == "default"
-    assert first["betas"] == ["server-side-fallback-2026-07-01"]
-    assert first["output_config"] == {"effort": "medium"}
-    assert [t["name"] for t in first["tools"]] == ["get_index", "compare_territories", "run_scenario"]
-    assert all(t["eager_input_streaming"] for t in first["tools"])
-    assert first["system"][0]["cache_control"] == {"type": "ephemeral"}
-    assert "синтетические" in first["system"][1]["text"]  # warns about demo data
+    first = fake.payloads[0]  # request shape of the GigaChat API
+    assert first["model"] == "GigaChat-3-Pro" and first["function_call"] == "auto"
+    assert [f["name"] for f in first["functions"]] == ["get_index", "compare_territories", "run_scenario"]
+    assert all(f["parameters"]["type"] == "object" and f["few_shot_examples"] for f in first["functions"])
+    system = first["messages"][0]
+    assert system["role"] == "system" and "синтетические" in system["content"]  # warns about demo data
+    assert first["messages"][1] == {"role": "user", "content": "Какой индекс у Махачкалы?"}
 
 
-async def test_ungrounded_number_is_flagged(client, container) -> None:  # noqa: ANN001
-    def only(kwargs):  # noqa: ANN001, ANN202
-        text = "В Ведено до больницы 137 минут."
-        return [text], [SimpleNamespace(type="text", text=text)], "end_turn"
-
-    container.chat._client = FakeClient([only])
+async def test_ungrounded_number_is_flagged(client, gigachat) -> None:  # noqa: ANN001
+    gigachat([lambda p: completion("В Ведено до больницы 137 минут.")])
     r = await client.post("/chat", json={"messages": [{"role": "user", "content": "Сколько до больницы в Ведено?"}]})
     done = parse_sse(r.text)[-1][1]
     assert done["grounding"]["ok"] is False and "137" in done["grounding"]["ungrounded"]
     assert "137" not in "".join(d["text"] for n, d in parse_sse(r.text) if n == "delta")
 
 
-async def test_scenario_tool_and_cross_cluster(client, container) -> None:  # noqa: ANN001
-    calls = []
+async def test_scenario_tools_and_cross_cluster(client, gigachat) -> None:  # noqa: ANN001
+    seen = {}
 
-    def r1(kwargs):  # noqa: ANN001, ANN202
-        return [], [
-            SimpleNamespace(type="tool_use", id="a", name="run_scenario", input={"scenario_code": "W1", "territory": "Ахты"}),
-            SimpleNamespace(type="tool_use", id="b", name="compare_territories", input={"territories": ["Махачкала", "Ахты"]}),
-        ], "tool_use"
+    def r1(payload: dict) -> dict:
+        return call("run_scenario", {"scenario_code": "W1", "territory": "Ахты"})
 
-    def r2(kwargs):  # noqa: ANN001, ANN202
-        results = {b["tool_use_id"]: json.loads(b["content"]) for b in kwargs["messages"][-1]["content"]}
-        calls.append(results)
-        return ["Готово."], [SimpleNamespace(type="text", text="Готово.")], "end_turn"
+    def r2(payload: dict) -> dict:
+        seen["w1"] = last_result(payload)
+        return call("compare_territories", {"territories": ["Махачкала", "Ахты"]})
 
-    container.chat._client = FakeClient([r1, r2])
-    r = await client.post("/chat", json={"messages": [{"role": "user", "content": "Открой ФАП в Ахтах и сравни с Махачкалой"}]})
+    def r3(payload: dict) -> dict:
+        seen["compare"] = last_result(payload)
+        # W2 with no POI layer loaded; "percent" does not belong to W2 and is dropped.
+        return call("run_scenario", {"scenario_code": "W2", "territory": "Ахты", "params": {"kind": "hospital", "percent": 30}})
+
+    def r4(payload: dict) -> dict:
+        seen["w2"] = last_result(payload)
+        return completion("Готово.")
+
+    gigachat([r1, r2, r3, r4])
+    r = await client.post("/chat", json={"messages": [{"role": "user", "content": "Открой ФАП в Ахтах, сравни с Махачкалой, закрой больницу"}]})
     events = parse_sse(r.text)
     assert events[-1][0] == "done"
-    results = calls[0]
-    assert results["a"]["affected"] > 0 and results["a"]["run_id"]
-    assert results["b"]["error"] == "cluster_mismatch"
+    assert [d["ok"] for n, d in events if n == "tool_result"] == [True, False, True]
+    assert seen["w1"]["affected"] > 0 and seen["w1"]["run_id"]
+    assert seen["compare"]["error"] == "cluster_mismatch"
+    assert seen["w2"]["affected"] > 0 and seen["w2"]["summary"]["max_delta"] <= 0
+    assert seen["w2"]["ignored_params"] == ["percent"]
 
 
-async def test_no_credentials_degrades_to_error_event(client, container, monkeypatch) -> None:  # noqa: ANN001
-    def boom():  # noqa: ANN202
-        raise TypeError("Could not resolve authentication method")
-
-    container.chat._client = None
-    monkeypatch.setattr(container.chat, "client", boom)
+async def test_no_credentials_degrades_to_error_event(client, container) -> None:  # noqa: ANN001
+    container.chat._gigachat = None  # test settings carry no GIGACHAT_CREDENTIALS
     r = await client.post("/chat", json={"messages": [{"role": "user", "content": "Привет"}]})
     events = parse_sse(r.text)
-    assert events[-1] == ("error", {"code": "chat_unavailable", "message": "Чат не настроен: нет доступа к LLM API"})
+    assert events[-1] == ("error", {"code": "chat_unavailable", "message": "Чат не настроен: нет ключа GigaChat (GIGACHAT_CREDENTIALS)"})
     bad = await client.post("/chat", json={"messages": [{"role": "assistant", "content": "x"}]})
     assert bad.status_code == 422 and bad.json()["code"] == "chat_last_not_user"

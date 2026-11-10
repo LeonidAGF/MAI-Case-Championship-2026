@@ -20,6 +20,7 @@ from app.explain.service import explain_territory
 from app.explain.texts import fact_text
 from app.profiles.contract import Profile
 from app.scoring.snapshots import r1
+from app.whatif.catalog import CATALOG
 
 POINT_SCENARIOS = {"W1": "fap", "W3": "school", "W4": "college", "W5": "railway_station", "W9": "park"}
 AREA_SCENARIOS = {"W6", "W7", "W10"}
@@ -62,8 +63,7 @@ def tool_definitions(feature_lines: str) -> list[dict[str, Any]]:
                 "рейтинг строится отдельно внутри каждого кластера. rank_by: total, S1..S6 или код "
                 "признака:\n" + feature_lines
             ),
-            "eager_input_streaming": True,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": {
                     "territory": {"type": "string", "description": "Название населённого пункта или района, напр. «Ахты»"},
@@ -83,8 +83,7 @@ def tool_definitions(feature_lines: str) -> list[dict[str, Any]]:
                 "Сравнение 2–3 территорий одного кластера: баллы, субиндексы, лидеры по субиндексам, "
                 "плюсы и минусы. Для территорий из разных кластеров вернёт ошибку с объяснением."
             ),
-            "eager_input_streaming": True,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": {
                     "territories": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 3}
@@ -97,24 +96,62 @@ def tool_definitions(feature_lines: str) -> list[dict[str, Any]]:
             "name": "run_scenario",
             "description": (
                 "Сценарий «что если» и пересчёт индекса до/после. W1 — открыть ФАП/больницу, W2 — закрыть "
-                "больницу, W3 — сад/школу, W4 — колледж, W5 — ЖД-станцию, W9 — парк/ТЦ/кинотеатр: "
-                "territory = населённый пункт, где открывается объект. W6 — ремонт трассы (−X% времени), "
-                "W7 — автобусный маршрут до райцентра, W10 — пакет W1+W3+W7: territory = район или "
-                "населённый пункт в нём. params — необязательные уточнения (kind, percent, radius_km)."
+                "больницу, W3 — сад/школу, W4 — колледж, W5 — ЖД-станцию, W8 — расширить аэропорт, "
+                "W9 — парк/ТЦ/кинотеатр: territory = населённый пункт, где находится объект. "
+                "W6 — ремонт трассы (−X% времени), W7 — автобусный маршрут до райцентра, W10 — пакет "
+                "W1+W3+W7: territory = район или населённый пункт в нём. params — необязательные уточнения."
             ),
-            "eager_input_streaming": True,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": {
                     "scenario_code": {"type": "string", "enum": [f"W{i}" for i in range(1, 11)]},
-                    "territory": {"type": "string"},
-                    "params": {"type": "object"},
+                    "territory": {"type": "string", "description": "Населённый пункт или район, напр. «Ахты»"},
+                    "params": {
+                        "type": "object",
+                        "description": "Необязательные уточнения сценария",
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "description": (
+                                    "Тип объекта. W1, W2: hospital | clinic | fap | ambulance; W3: kindergarten | "
+                                    "school; W4: college | university; W9: cafe | cinema | community_centre | "
+                                    "sports | park | mall | marketplace"
+                                ),
+                            },
+                            "percent": {"type": "number", "description": "W6, W8: сокращение времени в пути, %"},
+                            "radius_km": {"type": "number", "description": "Радиус влияния объекта, км"},
+                            "stop_access_min": {"type": "number", "description": "W7: время до новой остановки, мин"},
+                            "park_area_ha": {"type": "number", "description": "W9: площадь нового парка, га"},
+                        },
+                    },
                 },
                 "required": ["scenario_code"],
                 "additionalProperties": False,
             },
         },
     ]
+
+
+# GigaChat picks functions and fills arguments noticeably better with examples.
+FEW_SHOT_EXAMPLES: dict[str, list[dict[str, Any]]] = {
+    "get_index": [
+        {"request": "Какой индекс доступности у Ахты?", "params": {"territory": "Ахты"}},
+        {"request": "Топ-5 сёл Дагестана по медицине",
+         "params": {"region": "Дагестан", "cluster": "V", "rank_by": "S1", "limit": 5}},
+        {"request": "Где в Чечне дольше всего ехать до больницы?",
+         "params": {"region": "Чечня", "rank_by": "F01", "order": "worst"}},
+    ],
+    "compare_territories": [
+        {"request": "Сравни Нальчик и Владикавказ", "params": {"territories": ["Нальчик", "Владикавказ"]}},
+    ],
+    "run_scenario": [
+        {"request": "Что будет, если открыть ФАП в Ахтах?",
+         "params": {"scenario_code": "W1", "territory": "Ахты", "params": {"kind": "fap"}}},
+        {"request": "Что если закрыть больницу в Буйнакске?", "params": {"scenario_code": "W2", "territory": "Буйнакск"}},
+        {"request": "Отремонтировать трассы в Ахтынском районе, минус 30% времени",
+         "params": {"scenario_code": "W6", "territory": "Ахтынский район", "params": {"percent": 30}}},
+    ],
+}
 
 
 class ChatTools:
@@ -305,7 +342,10 @@ class ChatTools:
         }
 
     async def _scenario(self, session: AsyncSession, args: ScenarioInput, profile: Profile) -> dict[str, Any]:
-        params = dict(args.params)
+        # Keep only what the scenario accepts: a stray "kind" for W6 must not fail the whole run.
+        accepted = set(CATALOG[args.scenario_code].params_model.model_fields)
+        params = {k: v for k, v in args.params.items() if k in accepted}
+        ignored = sorted(set(args.params) - accepted)
         if args.territory:
             row, ambiguous = await self.resolve(session, args.territory)
             if ambiguous:
@@ -313,12 +353,17 @@ class ChatTools:
             if row is None:
                 return {"error": "not_found", "message": f"Территория «{args.territory}» не найдена"}
             if args.scenario_code in POINT_SCENARIOS or args.scenario_code in ("W2", "W8"):
+                if row.lat is None or row.lon is None:
+                    return {"error": "no_location", "message": f"У территории «{row.name}» нет координат"}
                 params.setdefault("lat", row.lat)
                 params.setdefault("lon", row.lon)
                 if args.scenario_code in POINT_SCENARIOS:
                     params.setdefault("kind", POINT_SCENARIOS[args.scenario_code])
             elif args.scenario_code in AREA_SCENARIOS:
-                municipality = row.id if row.level == "municipality" else row.parent_id
+                municipality = {"municipality": row.id, "settlement": row.parent_id}.get(row.level)
+                if municipality is None:
+                    return {"error": "scenario_scope",
+                            "message": "Для этого сценария укажите район или населённый пункт, а не субъект"}
                 params.setdefault("municipality_id", municipality)
         result = await self.c.whatif.run(
             session, scenario_code=args.scenario_code, params=params, profile=profile,
@@ -332,6 +377,7 @@ class ChatTools:
             "top_winners": [{"territory": w["name"], "delta": w["delta"]} for w in result["winners"][:5]],
             "top_losers": [{"territory": w["name"], "delta": w["delta"]} for w in result["losers"][:5]],
             "plan": result.get("plan"), "warnings": result["warnings"][:5], "sources": self._cite(),
+            **({"ignored_params": ignored} if ignored else {}),
         }
 
 

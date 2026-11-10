@@ -1283,6 +1283,131 @@
         }
       }
     },
+    "/knowledge/status": {
+      "get": {
+        "tags": [
+          "knowledge"
+        ],
+        "summary": "Status",
+        "operationId": "status_knowledge_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Status Knowledge Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/knowledge/search": {
+      "get": {
+        "tags": [
+          "knowledge"
+        ],
+        "summary": "Search",
+        "operationId": "search_knowledge_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 500,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "default": 5,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Search Knowledge Search Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/knowledge/chunks/{chunk_id}": {
+      "get": {
+        "tags": [
+          "knowledge"
+        ],
+        "summary": "Chunk",
+        "operationId": "chunk_knowledge_chunks__chunk_id__get",
+        "parameters": [
+          {
+            "name": "chunk_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Chunk Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Chunk Knowledge Chunks  Chunk Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/chat": {
       "post": {
         "tags": [
@@ -2523,6 +2648,24 @@
         ],
         "title": "IndexSingle"
       },
+      "KindOption": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "KindOption"
+      },
       "Leader": {
         "properties": {
           "territory_id": {
@@ -2963,6 +3106,30 @@
             "type": "string",
             "title": "Method"
           },
+          "target": {
+            "type": "string",
+            "enum": [
+              "point",
+              "municipality"
+            ],
+            "title": "Target",
+            "description": "point — нужны lat/lon (W2, W8: или poi_id); municipality — нужен municipality_id"
+          },
+          "kinds": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/KindOption"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kinds",
+            "description": "Варианты kind с подписями; null — выбора нет"
+          },
           "affects": {
             "items": {
               "type": "string"
@@ -2982,7 +3149,8 @@
           "example": {
             "additionalProperties": true,
             "type": "object",
-            "title": "Example"
+            "title": "Example",
+            "description": "Рабочий пример params (municipality_id — реальный район из базы)"
           }
         },
         "type": "object",
@@ -2991,6 +3159,7 @@
           "name",
           "type",
           "method",
+          "target",
           "affects",
           "description",
           "params_schema",
@@ -3766,6 +3935,10 @@
     {
       "name": "chat",
       "description": "Чат-ассистент (фича №2, SSE)"
+    },
+    {
+      "name": "knowledge",
+      "description": "База знаний, векторный и полнотекстовый поиск"
     },
     {
       "name": "system",

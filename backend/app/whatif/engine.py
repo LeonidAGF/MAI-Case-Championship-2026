@@ -16,6 +16,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,13 +30,19 @@ from app.scoring.matrix import MODE_PREFERENCE, load_values_all_modes
 from app.scoring.service import ScenarioOverlay, ScoringService
 from app.scoring.snapshots import persist_snapshot, r1
 from app.whatif import catalog as C
-from app.whatif.geo import analytical_minutes, haversine_km
+from app.whatif.geo import analytical_minutes, haversine_km, haversine_km_many
 from app.whatif.osrm import OsrmClient, OsrmUnavailable
 from app.core.metrics import WHATIF_FALLBACKS
 
 EPS = 1e-6
 MIN_DELTA = 0.05
 TERRITORY_FORMS = ("территория", "территории", "территорий")
+# W2 without a POI layer (see _close_estimate).
+DEPEND_RATIO = 1.25
+DEPEND_SLACK_MIN = 2.0
+VIA_RING_KM = 40.0
+ALT_SEARCH_KM = 100.0
+MAX_RATIO = 10.0
 
 
 @dataclass(frozen=True)
@@ -175,9 +182,12 @@ class WhatIfContext:
                 )
             ).scalar_one_or_none()
             if level != "municipality":
+                what = {"region": "субъект", "settlement": "населённый пункт"}.get(level or "", "несуществующую территорию")
+                message = f"municipality_id={municipality_id} указывает на {what}, а нужен муниципальный район/округ"
                 raise ValidationFailed(
-                    "municipality_id должен указывать на муниципальный район/округ",
+                    message,
                     code="scenario_params_invalid",
+                    details=[{"loc": ["municipality_id"], "msg": message, "type": "value_error"}],
                 )
             rows = await self.session.execute(
                 text("SELECT id FROM territory WHERE parent_id = :m AND is_scored ORDER BY id"),
@@ -224,7 +234,20 @@ class WhatIfContext:
             for t, i in pts
         }
 
-    async def find_poi(self, poi_id: int | None, lon: float | None, lat: float | None, categories: list[str]) -> dict:
+    async def find_poi(
+        self,
+        poi_id: int | None,
+        lon: float | None,
+        lat: float | None,
+        categories: list[str],
+        *,
+        required: bool = True,
+    ) -> dict | None:
+        """The object by id, or the nearest one of the categories within 3 km of the point.
+
+        ``required=False``: a point with no loaded object nearby returns None (the caller then
+        treats the point itself as the object). An explicit ``poi_id`` must always exist.
+        """
         if poi_id is not None:
             row = (
                 await self.session.execute(
@@ -248,9 +271,11 @@ class WhatIfContext:
                 )
             ).first()
         if row is None:
+            if poi_id is None and not required:
+                return None
             raise ValidationFailed(
-                "Объект не найден: укажите poi_id или точку не дальше 3 км от объекта "
-                "(POI загружаются командой `python -m app.cli load-poi`)",
+                f"Объект poi_id={poi_id} не найден" if poi_id is not None
+                else "Объект не найден: укажите poi_id или точку не дальше 3 км от объекта",
                 code="poi_not_found",
             )
         return {"id": row[0], "category": row[1], "lon": row[2], "lat": row[3], "name": row[4]}
@@ -306,9 +331,22 @@ async def _open_poi(ctx: WhatIfContext, p: Any) -> None:
 
 
 async def _close_poi(ctx: WhatIfContext, p: C.W2Params) -> None:
-    poi = await ctx.find_poi(p.poi_id, p.lon, p.lat, POI_CATEGORIES[p.kind])
+    poi = await ctx.find_poi(p.poi_id, p.lon, p.lat, POI_CATEGORIES[p.kind], required=p.poi_id is not None)
+    if poi is None:
+        ctx.warn(
+            "Рядом с точкой нет объекта из слоя POI: закрываемый объект считается находящимся в указанной точке, "
+            "время до следующего оценено через соседние населённые пункты (аналитический метод)"
+        )
+        await _close_estimate(ctx, p.kind, POI_CATEGORIES[p.kind], p.lon, p.lat, None, p.radius_km)  # type: ignore[arg-type]
+        return
     kind = CATEGORY_KIND.get(poi["category"], p.kind)
     cats = POI_CATEGORIES.get(kind, [poi["category"]])
+    if not await _close_by_matrix(ctx, poi, kind, cats):
+        await _close_estimate(ctx, kind, cats, poi["lon"], poi["lat"], poi["id"], p.radius_km)
+
+
+async def _close_by_matrix(ctx: WhatIfContext, poi: dict, kind: str, cats: list[str]) -> bool:
+    """Graph method: precomputed OSRM times to the closed object and to the alternatives."""
     effects = KIND_EFFECTS[kind]
     rows = (
         await ctx.session.execute(
@@ -323,87 +361,157 @@ async def _close_poi(ctx: WhatIfContext, p: C.W2Params) -> None:
         )
     ).all()
 
-    if rows:  # precomputed OSRM matrix (graph method)
-        ctx.methods_used.add("graph")
-        tids = sorted({r[0] for r in rows})
-        await ctx.load(tids)
-        alt_rows = await ctx.session.execute(
-            text(
-                """
-                SELECT tt.territory_id, tt.mode, min(tt.seconds) FROM travel_time tt
-                JOIN poi ON poi.id = tt.poi_id
-                WHERE tt.territory_id = ANY(:tids) AND poi.category = ANY(:cats) AND poi.id <> :id
-                GROUP BY tt.territory_id, tt.mode
-                """
-            ),
-            {"tids": tids, "cats": cats, "id": poi["id"]},
-        )
-        alt = {(r[0], r[1]): float(r[2]) for r in alt_rows}
-        no_alt = 0
-        for tid, mode, closed_s in rows:
-            next_s = alt.get((tid, mode))
-            if next_s is not None and next_s < closed_s:
-                continue  # the closed object was not the nearest one
-            value_modes = [m for m in ("any", mode) if m == mode or (m == "any" and mode == "car")]
-            for e in effects:
-                for m in value_modes:
-                    old = ctx.ws.get(tid, e.feature, m)
-                    if old is None:
-                        continue
-                    if e.type == "time":
-                        if next_s is None:
-                            no_alt += 1
-                            continue
-                        ctx.ws.set(tid, e.feature, m, max(old, old * next_s / max(closed_s, 1.0)))
-                    elif e.type == "count" and closed_s / 60.0 <= e.threshold_min:
-                        ctx.ws.set(tid, e.feature, m, max(0.0, old - 1))
-        if no_alt:
-            ctx.warn(f"Для {no_alt} значений не найден альтернативный объект в матрице времени — они не пересчитаны")
-        return
-
-    # Analytical: distance ratio to the next nearest object of the same category.
-    ctx.methods_used.add("analytical")
-    cand = await ctx.session.execute(
+    if not rows:
+        return False
+    ctx.methods_used.add("graph")
+    tids = sorted({r[0] for r in rows})
+    await ctx.load(tids)
+    alt_rows = await ctx.session.execute(
         text(
             """
-            SELECT t.id,
-                   ST_Distance(t.centroid::geography, cp.geom::geography) / 1000.0 AS d_closed,
-                   nxt.km AS d_next
-            FROM territory t
-            CROSS JOIN (SELECT geom FROM poi WHERE id = :id) cp
-            LEFT JOIN LATERAL (
-                SELECT ST_Distance(t.centroid::geography, p.geom::geography) / 1000.0 AS km
-                FROM poi p WHERE p.category = ANY(:cats) AND p.id <> :id
-                ORDER BY p.geom <-> t.centroid LIMIT 1
-            ) nxt ON true
-            WHERE t.is_scored AND ST_DWithin(t.centroid::geography, cp.geom::geography, :radius_m)
+            SELECT tt.territory_id, tt.mode, min(tt.seconds) FROM travel_time tt
+            JOIN poi ON poi.id = tt.poi_id
+            WHERE tt.territory_id = ANY(:tids) AND poi.category = ANY(:cats) AND poi.id <> :id
+            GROUP BY tt.territory_id, tt.mode
             """
         ),
-        {"id": poi["id"], "cats": cats, "radius_m": p.radius_km * 1000.0},
+        {"tids": tids, "cats": cats, "id": poi["id"]},
     )
-    cand_rows = cand.all()
-    await ctx.load([r[0] for r in cand_rows])
+    alt = {(r[0], r[1]): float(r[2]) for r in alt_rows}
     no_alt = 0
-    for tid, d_closed, d_next in cand_rows:
-        if d_next is None:
-            no_alt += 1
-            continue
-        if d_closed > d_next:
-            continue
-        ratio = min(10.0, d_next / max(d_closed, 0.5))
+    for tid, mode, closed_s in rows:
+        next_s = alt.get((tid, mode))
+        if next_s is not None and next_s < closed_s:
+            continue  # the closed object was not the nearest one
+        value_modes = [m for m in ("any", mode) if m == mode or (m == "any" and mode == "car")]
         for e in effects:
-            for m in ctx.ws.modes(tid, e.feature):
+            for m in value_modes:
                 old = ctx.ws.get(tid, e.feature, m)
                 if old is None:
                     continue
                 if e.type == "time":
-                    ctx.ws.set(tid, e.feature, m, old * ratio)
-                elif e.type == "count":
-                    speed = ctx.settings.whatif_car_speed_kmh if _reach_mode(e, m) == "car" else ctx.settings.whatif_foot_speed_kmh
-                    if analytical_minutes(d_closed, speed_kmh=speed, detour=ctx.settings.whatif_detour_factor) <= e.threshold_min:
-                        ctx.ws.set(tid, e.feature, m, max(0.0, old - 1))
+                    if next_s is None:
+                        no_alt += 1
+                        continue
+                    ctx.ws.set(tid, e.feature, m, max(old, old * next_s / max(closed_s, 1.0)))
+                elif e.type == "count" and closed_s / 60.0 <= e.threshold_min:
+                    ctx.ws.set(tid, e.feature, m, max(0.0, old - 1))
     if no_alt:
-        ctx.warn(f"Для {no_alt} территорий нет альтернативного объекта той же категории — они не пересчитаны")
+        ctx.warn(f"Для {no_alt} значений не найден альтернативный объект в матрице времени — они не пересчитаны")
+    return True
+
+
+async def _alternatives(
+    ctx: WhatIfContext, cats: list[str], lon: float, lat: float, exclude_id: int | None, radius_km: float
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Other loaded objects of the category around the closed one (None = no POI layer here)."""
+    rows = (
+        await ctx.session.execute(
+            text(
+                """
+                SELECT ST_X(geom), ST_Y(geom) FROM poi
+                WHERE category = ANY(:cats) AND (CAST(:ex AS integer) IS NULL OR id <> :ex)
+                  AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography, :r)
+                """
+            ),
+            {"cats": cats, "ex": exclude_id, "lon": lon, "lat": lat, "r": (2 * radius_km + ALT_SEARCH_KM) * 1000.0},
+        )
+    ).all()
+    if not rows:
+        return None
+    return np.array([r[0] for r in rows]), np.array([r[1] for r in rows])
+
+
+async def _close_estimate(
+    ctx: WhatIfContext, kind: str, cats: list[str], lon: float, lat: float, exclude_id: int | None, radius_km: float
+) -> None:
+    """Analytical closure of the object at (lon, lat).
+
+    * Loaded alternatives (POI layer): a territory whose nearest object was the closed one gets its
+      time scaled by the distance ratio next/closed (capped at x10).
+    * No POI layer: the territory depended on the object when the point is not farther than its
+      current nearest object (analytical time <= value x 1.25 + 2 min). The new time is the
+      cheapest detour via a settlement served by another object: time(t -> u) + value(u) — an
+      upper bound by the triangle inequality, built from the feature matrix alone.
+    * Counts within the threshold (objects in 30 min) lose one object either way.
+    """
+    s = ctx.settings
+    effects = KIND_EFFECTS[kind]
+    tids = await ctx.scored_within(lon, lat, radius_km)
+    if not tids:
+        ctx.warn(f"В радиусе {fmt_num(radius_km)} км от точки нет территорий, участвующих в расчёте")
+        return
+    ctx.methods_used.add("analytical")
+    alt = await _alternatives(ctx, cats, lon, lat, exclude_id, radius_km)
+    via = [] if alt is not None else await ctx.scored_within(lon, lat, radius_km + VIA_RING_KM)
+    await ctx.load(tids + via)
+
+    def minutes(km: np.ndarray | float, mode: str) -> np.ndarray:
+        speed = s.whatif_car_speed_kmh if mode == "car" else s.whatif_foot_speed_kmh
+        return np.maximum(s.whatif_min_access_min, np.asarray(km) * s.whatif_detour_factor / max(speed, 0.1) * 60.0)
+
+    pts = [t for t in tids if ctx.info[t].lon is not None]
+    if not pts:
+        return
+    lons = np.array([ctx.info[t].lon for t in pts])
+    lats = np.array([ctx.info[t].lat for t in pts])
+    d_closed = haversine_km_many(lon, lat, lons, lats)
+    d_next = None
+    if alt is not None:
+        d_next = np.array([haversine_km_many(x, y, alt[0], alt[1]).min() for x, y in zip(lons, lats, strict=True)])
+
+    served: dict[tuple[str, str, str], tuple[np.ndarray, np.ndarray, np.ndarray] | None] = {}
+
+    def served_elsewhere(code: str, mode: str, reach: str) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+        """Via-settlements whose nearest object is not the closed one: (lon, lat, value)."""
+        key = (code, mode, reach)
+        if key not in served:
+            us = [u for u in via if ctx.info[u].lon is not None and ctx.ws.get(u, code, mode) is not None]
+            served[key] = None
+            if us:
+                ulon = np.array([ctx.info[u].lon for u in us])
+                ulat = np.array([ctx.info[u].lat for u in us])
+                uval = np.array([ctx.ws.get(u, code, mode) for u in us], dtype=float)
+                keep = minutes(haversine_km_many(lon, lat, ulon, ulat), reach) > uval * DEPEND_RATIO + DEPEND_SLACK_MIN
+                if keep.any():
+                    served[key] = (ulon[keep], ulat[keep], uval[keep])
+        return served[key]
+
+    unresolved = 0
+    for e in effects:
+        for i, t in enumerate(pts):
+            for m in ctx.ws.modes(t, e.feature):
+                old = ctx.ws.get(t, e.feature, m)
+                if old is None:
+                    continue
+                reach = _reach_mode(e, m)
+                t_closed = float(minutes(d_closed[i], reach))
+                if e.type == "count":
+                    if t_closed <= e.threshold_min and old >= 1:
+                        ctx.ws.set(t, e.feature, m, old - 1)
+                    continue
+                if e.type != "time":
+                    continue
+                if d_next is not None:
+                    if d_closed[i] > d_next[i]:
+                        continue  # the closed object was not the nearest one
+                    new = old * min(MAX_RATIO, d_next[i] / max(d_closed[i], 0.5))
+                else:
+                    if t_closed > old * DEPEND_RATIO + DEPEND_SLACK_MIN:
+                        continue  # its nearest object is elsewhere
+                    others = served_elsewhere(e.feature, m, reach)
+                    if others is None:
+                        unresolved += 1
+                        continue
+                    detour = minutes(haversine_km_many(lons[i], lats[i], others[0], others[1]), reach) + others[2]
+                    new = min(float(detour.min()), old * MAX_RATIO)
+                if new > old + EPS:
+                    ctx.ws.set(t, e.feature, m, new)
+    if unresolved:
+        ctx.warn(
+            f"Для {unresolved} значений рядом не нашлось населённых пунктов, обслуживаемых другим объектом, "
+            "— они не пересчитаны"
+        )
 
 
 async def _scale(ctx: WhatIfContext, tids: list[int], codes: tuple[str, ...], factor: float) -> None:
