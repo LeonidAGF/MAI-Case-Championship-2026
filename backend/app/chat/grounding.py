@@ -1,14 +1,11 @@
-"""Numeric grounding check: every number in the answer must appear in tool results or the
-user's own messages (stage 7 DoD: "ни одной выдуманной цифры")."""
+"""Numeric grounding check against trusted project context and tool results."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 
-# Numbers not glued to letters (skips codes like F05, S1, W10, RU-DA).
 NUMBER = re.compile(r"(?<![\w.,])[-+−]?\d{1,3}(?:[  ]\d{3})+(?:[.,]\d+)?(?![\w])|(?<![\w.,])[-+−]?\d+(?:[.,]\d+)?(?![\w])")
-TRIVIAL_MAX = 10  # small integers ("топ-3", "2 территории") are not claims worth checking
 
 
 def parse_numbers(text: str) -> list[tuple[str, float]]:
@@ -41,10 +38,6 @@ def check_grounding(answer: str, evidence: list[str]) -> GroundingReport:
     checked = 0
     bad: list[str] = []
     for raw, value in parse_numbers(answer):
-        if value.is_integer() and 0 <= value <= TRIVIAL_MAX:
-            continue
-        if 1900 <= value <= 2100 and value.is_integer():  # years
-            continue
         checked += 1
         if not any(_close(value, a) for a in allowed):
             bad.append(raw)

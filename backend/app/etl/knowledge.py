@@ -1,13 +1,14 @@
-"""Knowledge base for the chat assistant (knowledge_chunk; RAG infra is MLOps').
+"""Knowledge documents and embeddings for the chat assistant.
 
 Input: .md/.txt (one document) or JSONL/CSV with columns text [, title, source_url,
 external_id | territory (+ region)]. Texts are chunked by paragraphs (~900 chars).
-Embeddings are optional (EMBEDDINGS_MODEL + sentence-transformers); without them the
-retriever uses Postgres full-text search (russian config).
+Embeddings use the configured FastEmbed model. PostgreSQL full-text search also
+indexes every chunk and remains available when embeddings are disabled.
 """
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -58,8 +59,20 @@ async def load_knowledge(
         docs = [{"title": path.stem, "text": read_text(path)}]
     else:
         docs = read_table(path)
+    return await load_documents(session, docs, source=source, replace=replace, embedder=embedder, file=str(path))
+
+
+async def load_documents(
+    session: AsyncSession,
+    docs: list[dict[str, Any]],
+    *,
+    source: str,
+    replace: bool,
+    embedder: Any | None,
+    file: str,
+) -> dict[str, Any]:
     if not docs:
-        raise ValueError(f"{path}: no documents")
+        raise ValueError(f"{file}: no documents")
     headers = list(docs[0])
     c_text = find_column(headers, ["text", "content", "текст"]) or "text"
     c_title = find_column(headers, ["title", "заголовок"])
@@ -100,11 +113,15 @@ async def load_knowledge(
             })
     embeddings: list[list[float]] | None = None
     if embedder is not None and records:
-        embeddings = embedder.embed([r["text"] for r in records])
+        embeddings = await asyncio.to_thread(embedder.embed, [r["text"] for r in records])
+        if len(embeddings) != len(records):
+            raise ValueError("embedding count does not match knowledge chunks")
     for i, r in enumerate(records):
         params = {**r, "emb": None, "model": None}
         if embeddings is not None:
-            params["emb"] = "[" + ",".join(f"{x:.6f}" for x in embeddings[i]) + "]"
+            from app.chat.retriever import vector_literal
+
+            params["emb"] = vector_literal(embeddings[i])
             params["model"] = embedder.model_name  # type: ignore[union-attr]
         await session.execute(
             text(
@@ -116,7 +133,7 @@ async def load_knowledge(
             ),
             params,
         )
-    stats = {"file": str(path), "documents": len(docs), "chunks": len(records),
+    stats = {"file": file, "documents": len(docs), "chunks": len(records),
              "territory_unresolved": unresolved, "embedded": embeddings is not None}
     await finish_run(session, run_id, stats)
     return {"etl_run_id": run_id, **stats}

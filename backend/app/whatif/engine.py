@@ -31,6 +31,7 @@ from app.scoring.snapshots import persist_snapshot, r1
 from app.whatif import catalog as C
 from app.whatif.geo import analytical_minutes, haversine_km
 from app.whatif.osrm import OsrmClient, OsrmUnavailable
+from app.core.metrics import WHATIF_FALLBACKS
 
 EPS = 1e-6
 MIN_DELTA = 0.05
@@ -206,8 +207,10 @@ class WhatIfContext:
                 self.methods_used.add("graph")
                 return {t: (None if m is None else max(floor, m)) for (t, _), m in zip(pts, mins, strict=True)}
             except OsrmUnavailable as exc:
+                WHATIF_FALLBACKS.labels("osrm_unavailable", mode).inc()
                 self.warn(f"OSRM недоступен ({exc}) — использован аналитический метод")
         elif self.method_pref == "graph":
+            WHATIF_FALLBACKS.labels("not_configured", mode).inc()
             self.warn("OSRM не настроен — использован аналитический метод")
         self.methods_used.add("analytical")
         speed = self.settings.whatif_car_speed_kmh if mode == "car" else self.settings.whatif_foot_speed_kmh

@@ -2,11 +2,22 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAtlas } from '@/lib/store';
-import { streamChat } from '@/lib/api';
+import { API, streamChat } from '@/lib/api';
+
+function citationHref(url: string | null): string | null {
+	if (!url) return null;
+	try {
+		const target = new URL(url, API);
+		return target.protocol === 'http:' || target.protocol === 'https:' ? target.toString() : null;
+	} catch {
+		return null;
+	}
+}
 
 interface Message {
 	role: 'user' | 'assistant';
 	content: string;
+	sources?: { title: string; url: string | null }[];
 }
 
 export function ChatWidget() {
@@ -43,12 +54,18 @@ export function ChatWidget() {
 				assistantText += chunk;
 				setMessages((prev) => {
 					const newArr = [...prev];
-					newArr[newArr.length - 1] = { role: 'assistant', content: assistantText };
+					newArr[newArr.length - 1] = { ...newArr[newArr.length - 1], content: assistantText };
+					return newArr;
+				});
+			}, (sources) => {
+				setMessages((prev) => {
+					const newArr = [...prev];
+					newArr[newArr.length - 1] = { ...newArr[newArr.length - 1], sources };
 					return newArr;
 				});
 			});
-		} catch (e: any) {
-			setError(e.message || 'Произошла ошибка при обращении к ИИ');
+		} catch (e: unknown) {
+			setError(e instanceof Error ? e.message : 'Произошла ошибка при обращении к ИИ');
 			setMessages((prev) => prev.slice(0, -1));
 		} finally {
 			setIsLoading(false);
@@ -90,7 +107,7 @@ export function ChatWidget() {
 					{messages.length === 0 && (
 						<div className="text-center text-gray-400 mt-10">
 							<p className="text-4xl mb-2">👋</p>
-							<p className="text-sm">Привет! Я знаю всё о доступности городов и сел Северного Кавказа.</p>
+							<p className="text-sm">Спросите о методике индекса или доступности территорий Северного Кавказа.</p>
 							<p className="text-sm">Спросите, например: "Где в Дагестане лучше всего с детскими садами?"</p>
 						</div>
 					)}
@@ -102,7 +119,16 @@ export function ChatWidget() {
 								? 'bg-blue-600 text-white rounded-br-none' 
 								: 'bg-white border text-gray-800 rounded-bl-none shadow-sm'
 							}`}>
-								{m.content || (m.role === 'assistant' && isLoading && <span className="animate-pulse">Печатает...</span>)}
+								{m.content || (m.role === 'assistant' && isLoading && <span className="animate-pulse">Проверяю данные...</span>)}
+								{m.sources && m.sources.length > 0 && (
+									<div className="mt-3 border-t pt-2 text-xs">
+										<div className="font-medium text-gray-500 mb-1">Источники</div>
+										{m.sources.map((source, index) => {
+											const href = citationHref(source.url);
+											return href ? <a key={index} href={href} target="_blank" rel="noopener noreferrer" className="block text-blue-600 underline mb-1">{source.title}</a> : <div key={index} className="text-gray-600">{source.title}</div>;
+										})}
+									</div>
+								)}
 							</div>
 						</div>
 					))}

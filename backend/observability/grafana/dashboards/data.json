@@ -1,0 +1,826 @@
+{
+  "uid": "atlas-data",
+  "title": "02 · Качество и происхождение данных",
+  "description": "Полнота признаков, актуальность источников, импутация и запасные способы расчёта.",
+  "tags": [
+    "СКФО",
+    "Атлас",
+    "наблюдаемость"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "region",
+        "label": "Субъект",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "atlas-prometheus"
+        },
+        "query": {
+          "query": "label_values(atlas_region_feature_coverage_ratio, region)",
+          "refId": "A"
+        },
+        "regex": "",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "feature",
+        "label": "Признак",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "atlas-prometheus"
+        },
+        "query": {
+          "query": "label_values(atlas_etl_imputed_feature_values, feature)",
+          "refId": "A"
+        },
+        "regex": "",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Сбор данных работает",
+      "description": "",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "atlas_data_collection_success",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 1,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Синтетические данные",
+      "description": "1 — индекс использует демопризнаки; полнота не означает достоверность значений.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "atlas_synthetic_demo_data_present",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "yellow"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Оценённых территорий",
+      "description": "",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(atlas_scored_territories)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Полнота признаков",
+      "description": "Доля заполненных значений; при демозагрузке 100% не означает достоверность признаков.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * avg(atlas_region_feature_coverage_ratio)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Возраст сбора",
+      "description": "",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - atlas_data_last_collection_timestamp_seconds",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Ревизия данных",
+      "description": "",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "atlas_data_revision",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 7,
+      "title": "Полнота по субъектам",
+      "description": "Средняя доля заполнения признаков в каждом регионе.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * atlas_region_feature_coverage_ratio{region=~\"$region\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 8,
+      "title": "Полнота признаков",
+      "description": "Собственное или унаследованное значение; пропуски остаются видимыми.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * atlas_feature_coverage_ratio{region=~\"$region\",feature=~\"$feature\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 9,
+      "title": "Территории по субъекту и кластеру",
+      "description": "",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "atlas_scored_territories{region=~\"$region\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 10,
+      "title": "Импутированные значения ETL",
+      "description": "Только значения с явным флагом imputed в таблице feature_value.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "atlas_etl_imputed_feature_values{feature=~\"$feature\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 11,
+      "title": "Пеший режим использовал авто",
+      "description": "Число территорий, где пеший профиль взял автомобильное время для признака.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "atlas_foot_to_car_fallback_values{feature=~\"$feature\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 12,
+      "title": "Возраст последнего источника",
+      "description": "Дни с даты as_of; демопризнаки имеют условную дату 1900-01-01, которую нельзя считать датой измерения.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(time() - atlas_feature_latest_as_of_timestamp_seconds{region=~\"$region\",feature=~\"$feature\"}) / 86400 and atlas_feature_latest_as_of_timestamp_seconds{region=~\"$region\",feature=~\"$feature\"} > 0",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 13,
+      "title": "Последний успешный ETL",
+      "description": "Секунды с завершения последнего успешного запуска каждого вида ETL.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - atlas_etl_last_success_timestamp_seconds > 0",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 14,
+      "title": "Ошибки ETL",
+      "description": "Накопленное число неудачных запусков по типу ETL.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "atlas_etl_failed_runs",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 15,
+      "title": "POI / официальный счётчик",
+      "description": "Соотношение количества POI на карте и официального счётчика; выше 100% возможно из-за различий методики.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * atlas_poi_official_coverage_ratio{region=~\"$region\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 16,
+      "title": "Учтённые POI",
+      "description": "Количество POI в базе по региону и категории.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "atlas_poi_mapped_count{region=~\"$region\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    }
+  ]
+}

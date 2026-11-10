@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -23,6 +24,8 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     environment: str = "dev"
     log_level: str = "INFO"
+    log_dir: Path | None = None
+    metrics_refresh_seconds: int = Field(default=300, ge=15)
     # Comma-separated list, e.g. "http://localhost:3000,https://atlas-skfo.ru"
     cors_origins: str = "http://localhost:3000"
 
@@ -76,7 +79,7 @@ class Settings(BaseSettings):
     chat_max_messages: int = 30
     chat_max_message_chars: int = 4000
     chat_rag_top_k: int = 4
-    # sentence-transformers model name; empty = full-text retrieval only.
+    # FastEmbed model name; empty = full-text retrieval only.
     embeddings_model: str = ""
 
     # --- limits --------------------------------------------------------------

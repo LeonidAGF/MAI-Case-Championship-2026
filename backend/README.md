@@ -15,6 +15,8 @@
 
 ## Быстрый старт
 
+Мониторинг Prometheus, Grafana и Loki запускается вместе с API; [инструкция и панели](observability/README.md).
+
 ```bash
 cd backend
 cp .env.example .env                      # порты и настройки
@@ -152,14 +154,43 @@ seeds/               субъекты, район→субъект (144 шт.), 
 ## Чат (фича №2)
 
 Claude (`LLM_MODEL=claude-opus-5-5`, `LLM_EFFORT`), потоковый цикл с тремя функциями
-`get_index`, `compare_territories`, `run_scenario` (принимают названия НП). Числа — только из
-результатов функций; ответ проверяется (`done.grounding`), цифры вне базы логируются.
+`get_index`, `compare_territories`, `run_scenario` (принимают названия НП). Числа о конкретных
+территориях берутся из функций; ответ проверяется (`done.grounding`), неподтверждённые числа не выдаются пользователю.
 Включён серверный fallback модели при отказе (`fallbacks: "default"`, отключается
 `LLM_FALLBACKS=false`). Нет ключа или сбой LLM → событие `error`, остальной API работает.
 События SSE: `meta`, `delta`, `tool_call`, `tool_result`, `citations`, `error`, `done`.
-RAG: Postgres FTS по `knowledge_chunk`; векторный поиск — при `EMBEDDINGS_MODEL` и
-`pip install -e .[embeddings]`. Контрольные вопросы: `python -m app.cli chat-eval --yes`
+RAG: гибридный поиск по русскому полнотекстовому индексу PostgreSQL и точный косинусный
+поиск pgvector по локальным мультиязычным эмбеддингам FastEmbed. Команда `seed` обновляет
+справочник методики из активного `MODEL_CONFIG_PATH` и индексирует его. В Docker модель
+загружается при сборке образа; на хосте установите `pip install -e .[embeddings]`.
+Контрольные вопросы: `python -m app.cli chat-eval --yes`
 (платно — вызывает API).
+
+### Проверка базы знаний и RAG
+
+Из каталога `backend` запустите `docker compose up -d --build --wait`, затем
+`docker compose run --rm api python -m app.cli seed --demo-features`. Повторный `seed`
+заменяет встроенный справочник без дубликатов. Если справочники и территории уже загружены,
+достаточно `docker compose run --rm api python -m app.cli seed-knowledge`.
+
+Откройте `http://localhost:8000/knowledge/status`: поля `chunks` и `embedded` должны быть
+положительными. Проверьте `http://localhost:8000/knowledge/search?q=больница&limit=5`:
+ответ содержит найденные фрагменты, `retrieval_methods` (`vector` и/или `full_text`) и
+`source_url`. Ссылка `/knowledge/chunks/{id}` открывает полный исходный фрагмент. Эти
+маршруты работают без ключа LLM. В `/docs` доступны их параметры.
+
+Свои проверенные материалы добавляются командой
+`docker compose run --rm api python -m app.cli load-knowledge /data/файл.jsonl --source team-data --replace --embed`.
+Формат JSONL: по объекту на строку, обязательное поле `text`, необязательные `title`,
+`source_url`, `external_id` или `territory` с `region`. Файл должен находиться в
+смонтированном каталоге `data`; в режиме Docker это `/data`. Указывайте источник и ссылку
+на оригинал, если материал проверен. Точные текущие баллы и минуты бот получает из
+расчётных инструментов, а не из текстов базы знаний.
+
+Для беседы добавьте `ANTHROPIC_API_KEY` в `backend/.env`, перезапустите API и откройте
+чат в веб-приложении. Источники появляются под ответом. Без ключа можно проверить
+поиск через `/knowledge/search`, а ответы самого бота — нельзя. Результаты
+`seed --demo-features` синтетические; чат предупреждает об этом.
 
 ## Тесты
 

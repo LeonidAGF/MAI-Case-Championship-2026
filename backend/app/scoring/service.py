@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import statistics
+import time
 from collections import OrderedDict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -11,6 +12,7 @@ import anyio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import NotFoundError
+from app.core.metrics import SCORE_CALLS, SCORE_COMPUTE_DURATION
 from app.modelcfg import ModelConfig
 from app.profiles.contract import Profile
 from app.scoring.contract import FeatureSpec, IndexEngine, ScoreRequest, TerritoryScore
@@ -187,7 +189,11 @@ class ScoringService:
     async def _run(self, request: ScoreRequest) -> dict[int, TerritoryScore]:
         if not request.targets:
             return {}
-        return await anyio.to_thread.run_sync(self.engine.score, request)
+        started = time.perf_counter()
+        try:
+            return await anyio.to_thread.run_sync(self.engine.score, request)
+        finally:
+            SCORE_COMPUTE_DURATION.labels(self.engine.name, request.cluster_code).observe(time.perf_counter() - started)
 
     async def score_cluster(
         self,
@@ -200,8 +206,10 @@ class ScoringService:
         key = (cluster_code, profile.mode, matrix.data_revision, profile.hash, overlay.run_id if overlay else None)
         hit = self._results.get(key)
         if hit is not None:
+            SCORE_CALLS.labels(cluster_code, "hit").inc()
             self._results.move_to_end(key)
             return hit
+        SCORE_CALLS.labels(cluster_code, "miss").inc()
         if overlay is None:
             targets: Mapping[int, Mapping[str, float | None]] = matrix.values
         else:

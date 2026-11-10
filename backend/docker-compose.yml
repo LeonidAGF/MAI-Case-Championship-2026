@@ -43,9 +43,13 @@ services:
       DATABASE_URL: postgresql+asyncpg://atlas:atlas@db:5432/atlas
       REDIS_URL: redis://redis:6379/0
       DATA_DIR: /data
+      LOG_DIR: /var/log/atlas
+      EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      EMBEDDINGS_OFFLINE: ${EMBEDDINGS_OFFLINE:-true}
     volumes:
       # ML outputs (parquet) from the repository root, read-only.
       - ../data:/data:ro
+      - api-logs:/var/log/atlas
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -59,5 +63,78 @@ services:
       timeout: 5s
       retries: 10
 
+  prometheus:
+    image: prom/prometheus:v3.13.3
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+  loki-init:
+    image: alpine:3.21
+    command: ["chown", "-R", "10001:10001", "/loki"]
+    volumes:
+      - loki-data:/loki
+
+  loki:
+    image: grafana/loki:3.7.0
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./observability/loki/local-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:${LOKI_PORT:-3100}:3100"
+    depends_on:
+      loki-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.21.3
+    command:
+      - run
+      - --storage.path=/var/lib/alloy
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - api-logs:/var/log/atlas:ro
+      - alloy-data:/var/lib/alloy
+    depends_on:
+      - loki
+      - api
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-atlas-demo-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
 volumes:
   db-data:
+  api-logs:
+  prometheus-data:
+  loki-data:
+  alloy-data:
+  grafana-data:

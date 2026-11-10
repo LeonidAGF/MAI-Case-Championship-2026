@@ -1,0 +1,33 @@
+groups:
+  - name: atlas-service
+    rules:
+      - alert: AtlasApiUnavailable
+        expr: up{job="atlas-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: API Атласа недоступен для Prometheus
+      - alert: AtlasHighServerErrorRate
+        expr: (sum(rate(atlas_http_requests_total{route!="/healthz",status=~"5.."}[5m])) / sum(rate(atlas_http_requests_total{route!="/healthz"}[5m]))) > 0.05 and sum(rate(atlas_http_requests_total{route!="/healthz"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Более 5% ответов API имеют код 5xx при наличии трафика
+  - name: atlas-data
+    rules:
+      - alert: AtlasDataMetricsStale
+        expr: atlas_data_collection_success == 0 or time() - atlas_data_last_collection_timestamp_seconds > 900
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Сбор метрик качества данных не работает или запаздывает
+      - alert: AtlasSyntheticDataPresent
+        expr: atlas_synthetic_demo_data_present == 1
+        for: 1m
+        labels:
+          severity: info
+        annotations:
+          summary: Деморежим — индекс использует синтетические значения признаков

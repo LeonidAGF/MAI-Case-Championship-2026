@@ -8,6 +8,9 @@ the what-if engine falls back to the analytical method with a warning.
 from __future__ import annotations
 
 import httpx
+import time
+
+from app.core.metrics import OSRM_DURATION, OSRM_REQUESTS
 
 PROFILE_PATH = {"car": "driving", "foot": "foot"}
 
@@ -47,15 +50,22 @@ class OsrmClient:
                 "annotations": "duration",
             }
             url = f"{base}/table/v1/{PROFILE_PATH[mode]}/{coords}"
+            started = time.perf_counter()
             try:
                 resp = await self._client.get(url, params=params)
             except httpx.HTTPError as exc:
+                OSRM_REQUESTS.labels(mode, "failure").inc()
                 raise OsrmUnavailable(str(exc)) from exc
+            finally:
+                OSRM_DURATION.labels(mode).observe(time.perf_counter() - started)
             if resp.status_code != 200:
+                OSRM_REQUESTS.labels(mode, "failure").inc()
                 raise OsrmUnavailable(f"OSRM HTTP {resp.status_code}")
             data = resp.json()
             if data.get("code") != "Ok":
+                OSRM_REQUESTS.labels(mode, "failure").inc()
                 raise OsrmUnavailable(f"OSRM error {data.get('code')}")
+            OSRM_REQUESTS.labels(mode, "success").inc()
             for row in data.get("durations", []):
                 value = row[0] if row else None
                 out.append(None if value is None else float(value) / 60.0)

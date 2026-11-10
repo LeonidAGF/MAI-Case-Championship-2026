@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+import time
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,11 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_container, get_session, profile_query, rate_limit
 from app.api.schemas import ScenarioInfo, WhatIfRequest, WhatIfResponse
 from app.core.errors import ERROR_RESPONSES, NotFoundError
+from app.core.metrics import WHATIF_AFFECTED, WHATIF_DELTA, WHATIF_DURATION, WHATIF_RUNS
 from app.profiles.contract import Profile, ProfileOut
 from app.whatif.catalog import CATALOG
 from app.whatif.engine import WhatIfService, stored_changes
 
 router = APIRouter(tags=["what-if"])
+log = logging.getLogger(__name__)
 
 
 @router.get("/whatif/scenarios", response_model=list[ScenarioInfo], summary="Каталог сценариев W1–W10")
@@ -41,16 +46,29 @@ async def scenarios() -> list[ScenarioInfo]:
 async def run(body: WhatIfRequest, request: Request, session: AsyncSession = Depends(get_session)) -> WhatIfResponse:
     c = get_container(request)
     profile = c.profiles.resolve(body.profile)
-    result = await c.whatif.run(
-        session,
-        scenario_code=body.scenario_code,
-        params=body.params,
-        profile=profile,
-        profile_id=c.profiles.pristine_preset_id(profile),
-        method=body.method,
-        model_version_id=await c.model_version_id(),
-    )
-    await session.commit()
+    scenario = body.scenario_code.upper() if body.scenario_code.upper() in CATALOG else "unknown"
+    started = time.perf_counter()
+    try:
+        result = await c.whatif.run(
+            session,
+            scenario_code=body.scenario_code,
+            params=body.params,
+            profile=profile,
+            profile_id=c.profiles.pristine_preset_id(profile),
+            method=body.method,
+            model_version_id=await c.model_version_id(),
+        )
+        await session.commit()
+    except Exception:
+        WHATIF_RUNS.labels(scenario, body.method, "failure").inc()
+        WHATIF_DURATION.labels(scenario, body.method).observe(time.perf_counter() - started)
+        raise
+    method_used = result["method_used"]
+    WHATIF_RUNS.labels(scenario, method_used, "success").inc()
+    WHATIF_DURATION.labels(scenario, method_used).observe(time.perf_counter() - started)
+    WHATIF_AFFECTED.labels(scenario).observe(result["affected"])
+    WHATIF_DELTA.labels(scenario).observe(result["summary"]["avg_delta"])
+    log.info("whatif_run", extra={"scenario": scenario, "method_used": method_used, "affected": result["affected"]})
     return WhatIfResponse(**result, profile=ProfileOut.of(profile))
 
 
