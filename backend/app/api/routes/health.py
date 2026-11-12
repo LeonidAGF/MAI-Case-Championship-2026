@@ -37,6 +37,17 @@ async def healthz(request: Request, response: Response) -> HealthResponse:
         checks["db"] = f"error: {type(exc).__name__}"
         status = "down"
 
+    try:  # separate session: a failed query must not affect the checks above
+        async with c.sessionmaker() as session:
+            known, total = (
+                await session.execute(text("SELECT count(minutes), count(*) FROM ambulance_time"))
+            ).one()
+        checks["ambulance"] = (
+            f"{known} of {total} settlements" if total else "not computed (run: python -m app.cli load-ambulance)"
+        )
+    except Exception as exc:  # noqa: BLE001 - health must report, not raise (e.g. migration not applied yet)
+        checks["ambulance"] = f"error: {type(exc).__name__}"
+
     cache_ok = await c.cache.ping()
     checks["cache"] = c.cache.backend
     if c.settings.redis_enabled and not cache_ok:

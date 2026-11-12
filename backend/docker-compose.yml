@@ -44,6 +44,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       DATA_DIR: /data
       OSM_DATA_DIR: /osm
+      GRAPH_DIR: /graph
+      SRTM_DIR: /srtm
       LOG_DIR: /var/log/atlas
       EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
       EMBEDDINGS_OFFLINE: ${EMBEDDINGS_OFFLINE:-true}
@@ -52,6 +54,9 @@ services:
       - ../data:/data:ro
       # Real OSM objects and features (CSV, scripts/20-21), read-only.
       - ../geo-embeddings/data:/osm:ro
+      # ML road graph (Git LFS) and the committed SRTM tiles, read-only: used by load-ambulance only.
+      - ../graph:/graph:ro
+      - ./data/srtm:/srtm:ro
       - api-logs:/var/log/atlas
     ports:
       - "${API_PORT:-8000}:8000"

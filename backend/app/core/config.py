@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     osm_data_dir: Path = REPO_DIR / "geo-embeddings" / "data"
     seeds_dir: Path = BACKEND_DIR / "seeds"
 
+    # --- ambulance travel times (app/ambulance; computed by `python -m app.cli load-ambulance`) ---
+    ambulance_config_path: Path = BACKEND_DIR / "config" / "ambulance.default.yaml"
+    # ML road graph (nodes.parquet, edges.parquet; Git LFS), read-only.
+    graph_dir: Path = REPO_DIR / "graph"
+    # SRTM elevation tiles (committed, 3″); fetch-srtm adds missing ones (never at request time).
+    srtm_dir: Path = BACKEND_DIR / "data" / "srtm"
+    # Resolution fetch-srtm stores: 3 = 1″ downloads averaged to 3″ (~90 m), 1 = keep 1″ (~30 m, 8x bigger).
+    srtm_arcsec: int = 3
+    # {folder} -> N43, {name} -> N43E044. Empty = no downloads: put .hgt / .hgt.gz / .zip tiles into SRTM_DIR.
+    srtm_url: str = "https://elevation-tiles-prod.s3.amazonaws.com/skadi/{folder}/{name}.hgt.gz"
+    srtm_timeout_s: float = Field(default=120.0, gt=0)
+
     # --- profile contract (section 9.2) ------------------------------------
     profile_param_max_len: int = 2000
 
@@ -103,6 +115,13 @@ class Settings(BaseSettings):
     max_index_items: int = 5000
     # Pre-compute cluster matrices and preset results in the background on startup.
     warmup_on_start: bool = True
+
+    @field_validator("srtm_arcsec")
+    @classmethod
+    def _srtm_arcsec(cls, value: int) -> int:
+        if value not in (1, 3):
+            raise ValueError("SRTM_ARCSEC must be 1 or 3")
+        return value
 
     @field_validator("anthropic_api_key", mode="before")
     @classmethod

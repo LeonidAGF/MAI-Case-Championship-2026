@@ -15,7 +15,9 @@ from fastapi.middleware.gzip import GZipMiddleware
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.api.routes import chat, compare, explain, health, index, knowledge, profiles, reference, territories, whatif
+from app.api.routes import (
+    ambulance, chat, compare, explain, health, index, knowledge, profiles, reference, territories, whatif,
+)
 from app.container import Container, build_container
 from app.core.config import Settings, get_settings
 from app.core.errors import install_error_handlers
@@ -26,8 +28,8 @@ log = logging.getLogger(__name__)
 
 DESCRIPTION = """
 Индекс доступности территорий СКФО: балл 0–100 и шесть субиндексов под профиль
-пользователя, объяснения, сравнение внутри кластера, симулятор what-if W1–W10 и
-чат-ассистент (опционально).
+пользователя, объяснения, сравнение внутри кластера, симулятор what-if W1–W10, время
+доезда скорой помощи и чат-ассистент (опционально).
 
 * Ошибки всегда в формате `{"code", "message", "details?"}`.
 * Профиль передаётся как `profile=<id пресета>` или `p=<сериализованный профиль>`
@@ -41,6 +43,7 @@ TAGS = [
     {"name": "explain", "description": "Объяснимость: водопад вкладов и тексты причин"},
     {"name": "compare", "description": "Сравнение side-by-side внутри кластера"},
     {"name": "what-if", "description": "Сценарии W1–W10 и их прогоны"},
+    {"name": "ambulance", "description": "Время доезда скорой помощи: дороги OSM, максимальные скорости, рельеф SRTM"},
     {"name": "profiles", "description": "Пресеты и кодирование профиля в ссылку"},
     {"name": "reference", "description": "Справочники и полнота данных"},
     {"name": "chat", "description": "Чат-ассистент (фича №2, SSE)"},
@@ -143,7 +146,7 @@ def create_app(container_factory: Callable[[Settings], Container] | None = None)
         body, content_type = exposition()
         return Response(content=body, media_type=content_type)
 
-    for module in (health, territories, index, explain, compare, whatif, profiles, reference, knowledge, chat):
+    for module in (health, territories, index, explain, compare, whatif, ambulance, profiles, reference, knowledge, chat):
         app.include_router(module.router)
     return app
 

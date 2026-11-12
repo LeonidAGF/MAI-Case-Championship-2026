@@ -2,7 +2,7 @@
 COMPOSE = docker compose
 RUN_API = $(COMPOSE) run --rm api
 
-.PHONY: up down logs seed seed-osm migrate test test-unit openapi coverage
+.PHONY: up down logs seed seed-osm load-ambulance fetch-srtm migrate test test-unit openapi coverage
 
 up:            ## db + redis + api (migrations run on start)
 	$(COMPOSE) up -d --build
@@ -21,6 +21,12 @@ seed:          ## reference tables + territories + OSM objects and features from
 
 seed-osm:      ## only the OSM objects and features (data/osm_poi.csv, data/osm_features.csv)
 	$(RUN_API) python -m app.cli seed-osm
+
+load-ambulance: ## ambulance travel times to all settlements (road graph + OSM max speeds + SRTM), after seed
+	$(RUN_API) python -m app.cli load-ambulance
+
+fetch-srtm:    ## add missing SRTM tiles to data/srtm (on the host: the container mounts it read-only)
+	python -m app.cli fetch-srtm
 
 coverage:
 	$(RUN_API) python -m app.cli coverage

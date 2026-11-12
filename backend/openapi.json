@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Атлас доступности территорий СКФО — API",
-    "description": "\nИндекс доступности территорий СКФО: балл 0–100 и шесть субиндексов под профиль\nпользователя, объяснения, сравнение внутри кластера, симулятор what-if W1–W10 и\nчат-ассистент (опционально).\n\n* Ошибки всегда в формате `{\"code\", \"message\", \"details?\"}`.\n* Профиль передаётся как `profile=<id пресета>` или `p=<сериализованный профиль>`\n  (контракт раздела 9.2), в теле POST — строкой или объектом.\n* Пагинация — `limit` / `offset`.\n",
+    "description": "\nИндекс доступности территорий СКФО: балл 0–100 и шесть субиндексов под профиль\nпользователя, объяснения, сравнение внутри кластера, симулятор what-if W1–W10, время\nдоезда скорой помощи и чат-ассистент (опционально).\n\n* Ошибки всегда в формате `{\"code\", \"message\", \"details?\"}`.\n* Профиль передаётся как `profile=<id пресета>` или `p=<сериализованный профиль>`\n  (контракт раздела 9.2), в теле POST — строкой или объектом.\n* Пагинация — `limit` / `offset`.\n",
     "version": "1.0.0"
   },
   "paths": {
@@ -1039,6 +1039,429 @@
         }
       }
     },
+    "/ambulance/method": {
+      "get": {
+        "tags": [
+          "ambulance"
+        ],
+        "summary": "Методика и параметры расчёта времени доезда скорой",
+        "operationId": "method_ambulance_method_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AmbulanceMethod"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambulance/settlements": {
+      "get": {
+        "tags": [
+          "ambulance"
+        ],
+        "summary": "Время доезда скорой до населённых пунктов: список для карты и таблицы",
+        "operationId": "settlements_ambulance_settlements_get",
+        "parameters": [
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Код субъекта ISO 3166-2, напр. RU-DA",
+              "title": "Region"
+            },
+            "description": "Код субъекта ISO 3166-2, напр. RU-DA"
+          },
+          {
+            "name": "municipality_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "id района (территории уровня municipality)",
+              "title": "Municipality Id"
+            },
+            "description": "id района (территории уровня municipality)"
+          },
+          {
+            "name": "cluster",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A | B | V (или А/Б/В)",
+              "title": "Cluster"
+            },
+            "description": "A | B | V (или А/Б/В)"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "met",
+                    "borderline",
+                    "not_met",
+                    "none"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Норматив: met, borderline, not_met; none — нет оценки",
+              "title": "Status"
+            },
+            "description": "Норматив: met, borderline, not_met; none — нет оценки"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "minutes",
+                "name",
+                "population",
+                "elevation",
+                "distance"
+              ],
+              "type": "string",
+              "default": "minutes",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string",
+              "default": "desc",
+              "title": "Order"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AmbulanceList"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Время доезда ещё не рассчитано",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambulance/settlements/{territory_id}": {
+      "get": {
+        "tags": [
+          "ambulance"
+        ],
+        "summary": "Время доезда скорой до населённого пункта: оценка, диапазон, норматив, база и маршрут",
+        "operationId": "settlement_ambulance_settlements__territory_id__get",
+        "parameters": [
+          {
+            "name": "territory_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Territory Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AmbulanceSettlement"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Время доезда ещё не рассчитано",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambulance/summary": {
+      "get": {
+        "tags": [
+          "ambulance"
+        ],
+        "summary": "Покрытие скорой помощью: доли населённых пунктов и жителей в пределах норматива",
+        "operationId": "summary_ambulance_summary_get",
+        "parameters": [
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Код субъекта ISO 3166-2, напр. RU-DA",
+              "title": "Region"
+            },
+            "description": "Код субъекта ISO 3166-2, напр. RU-DA"
+          },
+          {
+            "name": "municipality_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "id района: сводка по одному району",
+              "title": "Municipality Id"
+            },
+            "description": "id района: сводка по одному району"
+          },
+          {
+            "name": "group_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "region",
+                    "municipality"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Разбивка по субъектам или районам",
+              "title": "Group By"
+            },
+            "description": "Разбивка по субъектам или районам"
+          },
+          {
+            "name": "slowest",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 0,
+              "description": "Сколько самых долгих пунктов показать",
+              "default": 10,
+              "title": "Slowest"
+            },
+            "description": "Сколько самых долгих пунктов показать"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AmbulanceSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Время доезда ещё не рассчитано",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/profiles/presets": {
       "get": {
         "tags": [
@@ -1471,6 +1894,1179 @@
   },
   "components": {
     "schemas": {
+      "AmbulanceBase": {
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "ambulance — станция скорой помощи, hospital — больница"
+          },
+          "category_label": {
+            "type": "string",
+            "title": "Category Label"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "access_m": {
+            "type": "integer",
+            "title": "Access M",
+            "description": "От объекта до ближайшей дороги графа, м"
+          }
+        },
+        "type": "object",
+        "required": [
+          "external_id",
+          "name",
+          "category",
+          "category_label",
+          "location",
+          "access_m"
+        ],
+        "title": "AmbulanceBase"
+      },
+      "AmbulanceEstimate": {
+        "properties": {
+          "minutes": {
+            "type": "number",
+            "title": "Minutes",
+            "description": "Оценка времени доезда, мин: время в пути (+ приём вызова, если задан)"
+          },
+          "minutes_low": {
+            "type": "number",
+            "title": "Minutes Low",
+            "description": "Нижняя граница диапазона погрешности, мин"
+          },
+          "minutes_high": {
+            "type": "number",
+            "title": "Minutes High",
+            "description": "Верхняя граница диапазона погрешности, мин"
+          },
+          "travel_minutes": {
+            "type": "number",
+            "title": "Travel Minutes",
+            "description": "Только время в пути от базы, мин"
+          },
+          "dispatch_minutes": {
+            "type": "number",
+            "title": "Dispatch Minutes",
+            "description": "Приём вызова и выезд бригады, добавленные к пути, мин"
+          },
+          "norm_minutes": {
+            "type": "number",
+            "title": "Norm Minutes"
+          },
+          "norm_status": {
+            "type": "string",
+            "enum": [
+              "met",
+              "borderline",
+              "not_met"
+            ],
+            "title": "Norm Status",
+            "description": "met — даже верхняя граница в нормативе; not_met — даже нижняя дольше; borderline — норматив внутри диапазона"
+          }
+        },
+        "type": "object",
+        "required": [
+          "minutes",
+          "minutes_low",
+          "minutes_high",
+          "travel_minutes",
+          "dispatch_minutes",
+          "norm_minutes",
+          "norm_status"
+        ],
+        "title": "AmbulanceEstimate"
+      },
+      "AmbulanceGroup": {
+        "properties": {
+          "territory_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Territory Id"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "region",
+              "municipality"
+            ],
+            "title": "Level"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/AmbulanceStats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "territory_id",
+          "code",
+          "name",
+          "level",
+          "stats"
+        ],
+        "title": "AmbulanceGroup"
+      },
+      "AmbulanceList": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AmbulanceListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "norm_minutes": {
+            "type": "number",
+            "title": "Norm Minutes"
+          },
+          "computed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed At"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset",
+          "items",
+          "norm_minutes",
+          "computed_at",
+          "stale"
+        ],
+        "title": "AmbulanceList"
+      },
+      "AmbulanceListItem": {
+        "properties": {
+          "territory_id": {
+            "type": "integer",
+            "title": "Territory Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Code"
+          },
+          "municipality_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipality Id"
+          },
+          "municipality_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipality Name"
+          },
+          "cluster": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster"
+          },
+          "population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Population"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "elevation_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevation M"
+          },
+          "minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes"
+          },
+          "minutes_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes Low"
+          },
+          "minutes_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes High"
+          },
+          "norm_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "met",
+                  "borderline",
+                  "not_met"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Norm Status"
+          },
+          "distance_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Km"
+          },
+          "terrain_minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terrain Minutes"
+          },
+          "base_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Name"
+          },
+          "base_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Category"
+          }
+        },
+        "type": "object",
+        "required": [
+          "territory_id",
+          "name",
+          "region_code",
+          "municipality_id",
+          "municipality_name",
+          "cluster",
+          "population",
+          "location",
+          "elevation_m",
+          "minutes",
+          "minutes_low",
+          "minutes_high",
+          "norm_status",
+          "distance_km",
+          "terrain_minutes",
+          "base_name",
+          "base_category"
+        ],
+        "title": "AmbulanceListItem"
+      },
+      "AmbulanceMethod": {
+        "properties": {
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          },
+          "computed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed At"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
+          },
+          "norm_minutes": {
+            "type": "number",
+            "title": "Norm Minutes"
+          },
+          "thresholds": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Thresholds"
+          },
+          "dispatch_minutes": {
+            "type": "number",
+            "title": "Dispatch Minutes"
+          },
+          "uncertainty": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Uncertainty"
+          },
+          "speeds": {
+            "items": {
+              "$ref": "#/components/schemas/AmbulanceSpeed"
+            },
+            "type": "array",
+            "title": "Speeds"
+          },
+          "default_kmh": {
+            "type": "number",
+            "title": "Default Kmh"
+          },
+          "maxspeed_tags": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Maxspeed Tags"
+          },
+          "urban": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Urban"
+          },
+          "slope": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Slope"
+          },
+          "height": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Height"
+          },
+          "access": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Access"
+          },
+          "base_categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Base Categories"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "run": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Run",
+            "description": "Статистика последнего расчёта: граф, базы, скорости, рельеф"
+          },
+          "description": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_version",
+          "computed_at",
+          "run_id",
+          "stale",
+          "norm_minutes",
+          "thresholds",
+          "dispatch_minutes",
+          "uncertainty",
+          "speeds",
+          "default_kmh",
+          "maxspeed_tags",
+          "urban",
+          "slope",
+          "height",
+          "access",
+          "base_categories",
+          "sources",
+          "run",
+          "description"
+        ],
+        "title": "AmbulanceMethod"
+      },
+      "AmbulanceReach": {
+        "properties": {
+          "minutes": {
+            "type": "number",
+            "title": "Minutes"
+          },
+          "settlements": {
+            "type": "integer",
+            "title": "Settlements",
+            "description": "Населённых пунктов, куда скорая доезжает за это время"
+          },
+          "share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share",
+            "description": "Их доля среди пунктов с оценкой"
+          },
+          "population": {
+            "type": "integer",
+            "title": "Population",
+            "description": "Жители этих пунктов (только пункты с известным населением)"
+          },
+          "population_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Population Share",
+            "description": "Доля жителей среди пунктов с известным населением"
+          }
+        },
+        "type": "object",
+        "required": [
+          "minutes",
+          "settlements",
+          "share",
+          "population",
+          "population_share"
+        ],
+        "title": "AmbulanceReach"
+      },
+      "AmbulanceRoute": {
+        "properties": {
+          "distance_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Km",
+            "description": "Длина маршрута по дорогам, км"
+          },
+          "flat_minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flat Minutes",
+            "description": "Тот же маршрут без поправок на уклон и высоту, мин"
+          },
+          "terrain_minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terrain Minutes",
+            "description": "Сколько добавляют уклон и высота, мин"
+          },
+          "climb_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Climb M"
+          },
+          "descent_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descent M"
+          },
+          "max_height_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Height M",
+            "description": "Высшая точка маршрута над уровнем моря, м (SRTM)"
+          },
+          "steep_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steep Km",
+            "description": "Участки с уклоном от порога крутизны, км"
+          },
+          "urban_km": {
+            "type": "number",
+            "title": "Urban Km",
+            "description": "Участки в населённых пунктах (скорость как в населённом пункте), км"
+          },
+          "osm_speed_km": {
+            "type": "number",
+            "title": "Osm Speed Km",
+            "description": "Участки со скоростью из тега maxspeed OpenStreetMap, км"
+          },
+          "no_terrain_km": {
+            "type": "number",
+            "title": "No Terrain Km",
+            "description": "Участки без данных рельефа, км"
+          },
+          "access_m": {
+            "type": "integer",
+            "title": "Access M",
+            "description": "От населённого пункта до ближайшей дороги графа, м"
+          }
+        },
+        "type": "object",
+        "required": [
+          "distance_km",
+          "flat_minutes",
+          "terrain_minutes",
+          "climb_m",
+          "descent_m",
+          "max_height_m",
+          "steep_km",
+          "urban_km",
+          "osm_speed_km",
+          "no_terrain_km",
+          "access_m"
+        ],
+        "title": "AmbulanceRoute"
+      },
+      "AmbulanceScope": {
+        "properties": {
+          "territory_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Territory Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "federal_district",
+              "region",
+              "municipality"
+            ],
+            "title": "Level"
+          }
+        },
+        "type": "object",
+        "required": [
+          "territory_id",
+          "name",
+          "level"
+        ],
+        "title": "AmbulanceScope"
+      },
+      "AmbulanceSettlement": {
+        "properties": {
+          "territory_id": {
+            "type": "integer",
+            "title": "Territory Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Code"
+          },
+          "region_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Name"
+          },
+          "municipality_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipality Id"
+          },
+          "municipality_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipality Name"
+          },
+          "cluster": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster"
+          },
+          "population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Population"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "elevation_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevation M",
+            "description": "Высота населённого пункта над уровнем моря, м (SRTM)"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "estimate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AmbulanceEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AmbulanceBase"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AmbulanceRoute"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Почему нет оценки: far_from_roads — далеко от дорог, по которым можно доехать"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags",
+            "description": "hospital_base, far_from_roads, no_terrain, stale"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          },
+          "computed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed At"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale",
+            "description": "Параметры модели изменились после расчёта: нужен load-ambulance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "territory_id",
+          "name",
+          "region_code",
+          "region_name",
+          "municipality_id",
+          "municipality_name",
+          "cluster",
+          "population",
+          "location",
+          "elevation_m",
+          "available",
+          "estimate",
+          "base",
+          "route",
+          "reason",
+          "flags",
+          "text",
+          "notes",
+          "model_version",
+          "computed_at",
+          "stale"
+        ],
+        "title": "AmbulanceSettlement"
+      },
+      "AmbulanceSpeed": {
+        "properties": {
+          "highway": {
+            "type": "string",
+            "title": "Highway"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "urban_kmh": {
+            "type": "number",
+            "title": "Urban Kmh"
+          },
+          "rural_kmh": {
+            "type": "number",
+            "title": "Rural Kmh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "highway",
+          "label",
+          "urban_kmh",
+          "rural_kmh"
+        ],
+        "title": "AmbulanceSpeed"
+      },
+      "AmbulanceStats": {
+        "properties": {
+          "settlements": {
+            "type": "integer",
+            "title": "Settlements"
+          },
+          "estimated": {
+            "type": "integer",
+            "title": "Estimated"
+          },
+          "without_estimate": {
+            "type": "integer",
+            "title": "Without Estimate"
+          },
+          "median_minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Minutes"
+          },
+          "p90_minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P90 Minutes"
+          },
+          "max_minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Minutes"
+          },
+          "within_norm": {
+            "$ref": "#/components/schemas/AmbulanceReach"
+          },
+          "thresholds": {
+            "items": {
+              "$ref": "#/components/schemas/AmbulanceReach"
+            },
+            "type": "array",
+            "title": "Thresholds"
+          },
+          "norm_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Norm Status"
+          },
+          "population_settlements": {
+            "type": "integer",
+            "title": "Population Settlements",
+            "description": "Пункты с оценкой и известным населением"
+          },
+          "population_known": {
+            "type": "integer",
+            "title": "Population Known",
+            "description": "Их население"
+          },
+          "hospital_base_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hospital Base Share",
+            "description": "Доля пунктов, где ближайшая база — больница"
+          }
+        },
+        "type": "object",
+        "required": [
+          "settlements",
+          "estimated",
+          "without_estimate",
+          "median_minutes",
+          "p90_minutes",
+          "max_minutes",
+          "within_norm",
+          "thresholds",
+          "norm_status",
+          "population_settlements",
+          "population_known",
+          "hospital_base_share"
+        ],
+        "title": "AmbulanceStats"
+      },
+      "AmbulanceSummary": {
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/AmbulanceScope"
+          },
+          "norm_minutes": {
+            "type": "number",
+            "title": "Norm Minutes"
+          },
+          "dispatch_minutes": {
+            "type": "number",
+            "title": "Dispatch Minutes"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/AmbulanceStats"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/AmbulanceGroup"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "slowest": {
+            "items": {
+              "$ref": "#/components/schemas/AmbulanceListItem"
+            },
+            "type": "array",
+            "title": "Slowest"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          },
+          "computed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed At"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "norm_minutes",
+          "dispatch_minutes",
+          "stats",
+          "groups",
+          "slowest",
+          "text",
+          "model_version",
+          "computed_at",
+          "stale"
+        ],
+        "title": "AmbulanceSummary"
+      },
       "Attractiveness": {
         "properties": {
           "score": {
@@ -3922,6 +5518,10 @@
     {
       "name": "what-if",
       "description": "Сценарии W1–W10 и их прогоны"
+    },
+    {
+      "name": "ambulance",
+      "description": "Время доезда скорой помощи: дороги OSM, максимальные скорости, рельеф SRTM"
     },
     {
       "name": "profiles",
