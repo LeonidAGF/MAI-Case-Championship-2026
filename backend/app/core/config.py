@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -72,19 +73,18 @@ class Settings(BaseSettings):
     chat_enabled: bool = True
     chat_max_tool_rounds: int = 6
 
-    # GigaChat (Sber). Authorization key = base64(client_id:client_secret) from the developer cabinet.
-    gigachat_credentials: SecretStr | None = None
-    gigachat_scope: str = "GIGACHAT_API_PERS"  # GIGACHAT_API_B2B / GIGACHAT_API_CORP for legal entities
-    gigachat_model: str = "GigaChat-3-Pro"
-    gigachat_auth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
-    gigachat_base_url: str = "https://api.giga.chat/v1"
-    # Russian Trusted Root/Sub CA (file or directory), trusted by the GigaChat client only.
-    gigachat_ca_bundle: Path | None = BACKEND_DIR / "config" / "certs"
-    gigachat_verify_ssl: bool = True
-    gigachat_timeout_s: float = 60.0
-    gigachat_max_retries: int = 2
-    gigachat_max_tokens: int = 2048
-    gigachat_temperature: float | None = Field(default=None, gt=0, le=2)
+    # Anthropic Claude (app.chat.llm). The key is read from ANTHROPIC_API_KEY (environment or backend/.env).
+    anthropic_api_key: SecretStr | None = None
+    # claude-sonnet-5-5 (default) | claude-haiku-5-5 (faster, cheaper) | claude-opus-5-5 (strongest Opus)
+    llm_model: str = "claude-sonnet-5-5"
+    # Thinking depth and token spend (output_config.effort): low | medium | high | xhigh | max.
+    llm_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    # Requests are not streamed: above ~20K tokens the SDK requires streaming.
+    llm_max_tokens: int = Field(default=16000, ge=1024, le=20000)
+    # Server-side refusal fallback (fallbacks="default"); sent only to models that support it.
+    llm_fallbacks: bool = True
+    llm_timeout_s: float = Field(default=90.0, gt=0)
+    llm_max_retries: int = Field(default=2, ge=0, le=5)
     chat_max_messages: int = 30
     chat_max_message_chars: int = 4000
     chat_rag_top_k: int = 4
@@ -102,10 +102,10 @@ class Settings(BaseSettings):
     # Pre-compute cluster matrices and preset results in the background on startup.
     warmup_on_start: bool = True
 
-    @field_validator("gigachat_credentials", "gigachat_ca_bundle", "gigachat_temperature", mode="before")
+    @field_validator("anthropic_api_key", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
-        # `KEY=` lines in .env mean "not set", not an empty secret / path / number.
+        # `KEY=` lines in .env mean "not set", not an empty secret.
         return None if isinstance(value, str) and not value.strip() else value
 
     # --- convenience -----------------------------------------------------------
