@@ -13,6 +13,8 @@ from app.cache import MemoryCache, RedisCache, make_cache
 from app.core.config import Settings
 from app.core.ratelimit import RateLimiter
 from app.db.session import make_engine, make_sessionmaker
+from app.markets.config import load_markets_config
+from app.markets.service import MarketService
 from app.modelcfg import ModelConfig, load_model_config
 from app.profiles.service import ProfileResolver
 from app.scoring.contract import IndexEngine
@@ -42,6 +44,7 @@ class Container:
     rate_limiter: RateLimiter
     osrm: OsrmClient
     whatif: WhatIfService
+    markets: MarketService
     chat: ChatService | None = None
     _model_version_id: int | None = field(default=None, repr=False)
     _mv_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -59,6 +62,7 @@ class Container:
 
     def reset_caches(self) -> None:
         self.scoring.clear()
+        self.markets.clear()
         self._model_version_id = None
 
     async def warmup(self) -> None:
@@ -68,6 +72,7 @@ class Container:
                 for cluster in self.cfg.clusters:
                     for pv in self.profiles.presets():
                         await self.scoring.score_cluster(session, cluster, pv.profile)
+                await self.markets.table(session)
             await self.model_version_id()
             log.info("Warm-up done: %d clusters x %d presets", len(self.cfg.clusters), len(self.cfg.presets))
         except Exception as exc:  # noqa: BLE001 - warm-up is best effort (e.g. empty DB)
@@ -88,7 +93,8 @@ def build_container(settings: Settings, *, with_chat: bool = True) -> Container:
     sessionmaker = make_sessionmaker(db)
     cache = make_cache(settings.redis_url, settings.cache_prefix)
     # 5 presets x 3 clusters stay hot; ~10 MB per large-cluster result.
-    scoring = ScoringService(cfg, engine, MatrixStore(), DataRevision(), lru_size=16)
+    revision = DataRevision()
+    scoring = ScoringService(cfg, engine, MatrixStore(), revision, lru_size=16)
     osrm = OsrmClient(
         settings.osrm_car_url,
         settings.osrm_foot_url,
@@ -107,6 +113,7 @@ def build_container(settings: Settings, *, with_chat: bool = True) -> Container:
         rate_limiter=RateLimiter(cache, enabled=settings.rate_limit_enabled),
         osrm=osrm,
         whatif=WhatIfService(cfg, settings, scoring, osrm),
+        markets=MarketService(cfg, load_markets_config(settings.markets_config_path), revision),
     )
     if with_chat:
         from app.chat.service import ChatService

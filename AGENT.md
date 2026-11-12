@@ -39,8 +39,9 @@ docs/links       numbered list of sources (market, migration and population stat
 
 ```
 OSM, statistics ──► ML (scripts/) ──► data/, graph/, clast/, ml_results/, geo-embeddings/data/
-                                        │ committed files; backend `seed` reads data/ and
-                                        │ geo-embeddings/data/ (OSM CSV), never writes ML folders
+                                        │ committed files; backend `seed` reads data/,
+                                        │ geo-embeddings/data/ (OSM CSV) and the ML gravity CSV
+                                        │ in ml_results/, never writes ML folders
                                         ▼
 browser ◄── web (Next.js) ◄── HTTP/JSON ──► backend (FastAPI) ──► PostgreSQL + PostGIS + pgvector
                                               │                    Redis (cache, rate limits)
@@ -76,6 +77,11 @@ browser ◄── web (Next.js) ◄── HTTP/JSON ──► backend (FastAPI) 
 - **Synthetic data**: feature values with `source='synthetic-demo'` and `as_of=1900-01-01`. Only the
   integration test database has them; `seed` deletes any left over from older versions, and every
   output still flags them if they appear.
+- **Sales markets and sectors** (`/markets`, tasks 4+5): six sales markets per settlement (local,
+  catchment, regional, institutional, retail, interregional) and six production sectors that weigh
+  them. The main score is an **absolute** 0–100 from the settlement's own values through fixed
+  scales (`backend/config/markets.default.yaml`); the percentile across СКФО or inside the cluster
+  and the place in the cluster are **additional** metrics. Don't turn the score back into a rank.
 - **Population**: known (from OSM) for only 1,545 of 3,403 settlements, about 8.55 M people of
   СКФО's ~10.3 M. Population-weighted numbers must state that coverage.
 
@@ -85,7 +91,7 @@ browser ◄── web (Next.js) ◄── HTTP/JSON ──► backend (FastAPI) 
 cd backend
 cp .env.example .env               # only if backend/.env does not exist yet
 docker compose up -d --build       # db, redis, api (migrations run on start), monitoring
-docker compose run --rm api python -m app.cli seed   # territories + real OSM features + chat knowledge
+docker compose run --rm api python -m app.cli seed   # territories, real OSM data, ML gravity, chat knowledge
 cd ../web && npm install && npm run dev               # http://localhost:3000
 ```
 
@@ -95,8 +101,8 @@ http://localhost:3001.
 ## Rules for every change
 
 - **ML artifacts are read-only** unless the task is ML work: `data/`, `graph/`, `clast/`,
-  `ml_results/`, `geo-embeddings/data/`. The backend only reads `data/` and the OSM CSV files in
-  `geo-embeddings/data/`.
+  `ml_results/`, `geo-embeddings/data/`. The backend only reads `data/`, the OSM CSV files in
+  `geo-embeddings/data/` and `ml_results/settlement_gravity_observed.csv`.
 - **Secrets.** `backend/.env` holds the Anthropic API key. Never print it, copy it into other files or
   commit it. `.env*` is gitignored, but `backend/.env.example` is tracked, so keep it secret-free.
 - **Paid calls.** `python -m app.cli chat-eval` and anything else that calls the Anthropic API costs
@@ -126,6 +132,8 @@ Change both sides in the same branch, or coordinate with the owner:
 | Model config YAML + `IndexEngine` | ML (`MODEL_CONFIG_PATH`, `SCORING_ENGINE`) | `backend/app/modelcfg.py`, `backend/app/scoring/contract.py` |
 | Territory parquet schemas | ML (`data/*.parquet`) | `backend/app/etl/territories.py` |
 | OSM objects and features (`osm_poi.csv`, `osm_features.csv`) | ML (`scripts/20-21`, `geo-embeddings/data/`) | `backend/app/cli.py` (`seed`, `seed-osm`), `app/etl/poi.py`, `app/etl/features.py` |
+| Gravity results (`ml_results/settlement_gravity_observed.csv`: `settlement_id`, `known_destination_population`, `gravity_observed_30/60/120`) | ML (`scripts/15_calculate_gravity.py`) | `backend/app/etl/ml_results.py` (`load-ml-results`, part of `seed`), `backend/app/markets/` |
+| Sales-market scales and sector weights (`backend/config/markets.default.yaml`, expert values) | backend, reviewed with ML | `backend/app/markets/` |
 
 ## Git
 
@@ -143,7 +151,8 @@ Change both sides in the same branch, or coordinate with the owner:
   estimates); betweenness isn't computed; validation so far is manual only.
 - The older ML pipeline steps can't be re-run from a fresh clone: several steps and all
   intermediate inputs are missing (steps 20–21 can, see [scripts/AGENT.md](scripts/AGENT.md)).
-- The backend doesn't use `ml_results/` (the transport index and gravity) or the GraphSAGE files yet.
+- From `ml_results/` the backend uses only the gravity results (buyers within reach for `/markets`);
+  the provisional transport index, closeness and the GraphSAGE files aren't used yet.
 - `README_ML.md` is referenced but missing.
 - Development happens on Windows (PowerShell) as well as Unix shells: `Makefile` targets work only
   in Linux, macOS and WSL.

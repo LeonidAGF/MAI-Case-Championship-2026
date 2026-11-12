@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Атлас доступности территорий СКФО — API",
-    "description": "\nИндекс доступности территорий СКФО: балл 0–100 и шесть субиндексов под профиль\nпользователя, объяснения, сравнение внутри кластера, симулятор what-if W1–W10 и\nчат-ассистент (опционально).\n\n* Ошибки всегда в формате `{\"code\", \"message\", \"details?\"}`.\n* Профиль передаётся как `profile=<id пресета>` или `p=<сериализованный профиль>`\n  (контракт раздела 9.2), в теле POST — строкой или объектом.\n* Пагинация — `limit` / `offset`.\n",
+    "description": "\nИндекс доступности территорий СКФО: балл 0–100 и шесть субиндексов под профиль\nпользователя, объяснения, сравнение внутри кластера, симулятор what-if W1–W10 и\nоценка рынков сбыта для предпринимателей и чат-ассистент (опционально).\n\n* Ошибки всегда в формате `{\"code\", \"message\", \"details?\"}`.\n* Профиль передаётся как `profile=<id пресета>` или `p=<сериализованный профиль>`\n  (контракт раздела 9.2), в теле POST — строкой или объектом.\n* Пагинация — `limit` / `offset`.\n",
     "version": "1.0.0"
   },
   "paths": {
@@ -1039,6 +1039,281 @@
         }
       }
     },
+    "/markets/catalog": {
+      "get": {
+        "tags": [
+          "markets"
+        ],
+        "summary": "Рынки сбыта, отрасли и их веса (методика)",
+        "operationId": "catalog_markets_catalog_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketCatalog"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/markets/clusters": {
+      "get": {
+        "tags": [
+          "markets"
+        ],
+        "summary": "Кластеры А/Б/В по рынкам сбыта: уровни рынков, отрасли и лучшие населённые пункты",
+        "operationId": "clusters_markets_clusters_get",
+        "parameters": [
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Код субъекта ISO 3166-2, напр. RU-DA",
+              "title": "Region"
+            },
+            "description": "Код субъекта ISO 3166-2, напр. RU-DA"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketClusters"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/markets/sectors/{sector}": {
+      "get": {
+        "tags": [
+          "markets"
+        ],
+        "summary": "Рейтинг населённых пунктов для отрасли (по СКФО или внутри кластера)",
+        "operationId": "sector_rating_markets_sectors__sector__get",
+        "parameters": [
+          {
+            "name": "sector",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sector"
+            }
+          },
+          {
+            "name": "cluster",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A, B или V (А/Б/В): рейтинг внутри кластера",
+              "title": "Cluster"
+            },
+            "description": "A, B или V (А/Б/В): рейтинг внутри кластера"
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Код субъекта ISO 3166-2, напр. RU-DA",
+              "title": "Region"
+            },
+            "description": "Код субъекта ISO 3166-2, напр. RU-DA"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectorRating"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/markets/territories/{territory_id}": {
+      "get": {
+        "tags": [
+          "markets"
+        ],
+        "summary": "Рынки сбыта населённого пункта и оценка для каждой отрасли",
+        "operationId": "territory_markets_markets_territories__territory_id__get",
+        "parameters": [
+          {
+            "name": "territory_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Territory Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerritoryMarkets"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/profiles/presets": {
       "get": {
         "tags": [
@@ -1678,6 +1953,160 @@
           "territories"
         ],
         "title": "ClusterInfo"
+      },
+      "ClusterMarket": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "median_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Score",
+            "description": "Медиана балла рынка по населённым пунктам кластера"
+          },
+          "medians": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Medians",
+            "description": "Медианы исходных значений частей рынка"
+          },
+          "settlements": {
+            "$ref": "#/components/schemas/TierShares",
+            "description": "Доли населённых пунктов кластера по уровню рынка"
+          },
+          "population": {
+            "$ref": "#/components/schemas/TierShares",
+            "description": "То же, взвешенное по известному населению"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "median_score",
+          "medians",
+          "settlements",
+          "population"
+        ],
+        "title": "ClusterMarket"
+      },
+      "ClusterMarkets": {
+        "properties": {
+          "cluster": {
+            "type": "string",
+            "title": "Cluster"
+          },
+          "cluster_name": {
+            "type": "string",
+            "title": "Cluster Name"
+          },
+          "settlements": {
+            "type": "integer",
+            "title": "Settlements"
+          },
+          "settlements_with_population": {
+            "type": "integer",
+            "title": "Settlements With Population"
+          },
+          "population_known": {
+            "type": "integer",
+            "title": "Population Known"
+          },
+          "markets": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterMarket"
+            },
+            "type": "array",
+            "title": "Markets"
+          },
+          "sectors": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterSector"
+            },
+            "type": "array",
+            "title": "Sectors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cluster",
+          "cluster_name",
+          "settlements",
+          "settlements_with_population",
+          "population_known",
+          "markets",
+          "sectors"
+        ],
+        "title": "ClusterMarkets"
+      },
+      "ClusterSector": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "median_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Score",
+            "description": "Медиана балла отрасли по населённым пунктам кластера"
+          },
+          "settlements": {
+            "$ref": "#/components/schemas/TierShares"
+          },
+          "population": {
+            "$ref": "#/components/schemas/TierShares"
+          },
+          "leaders": {
+            "items": {
+              "$ref": "#/components/schemas/SectorLeader"
+            },
+            "type": "array",
+            "title": "Leaders",
+            "description": "Лучшие населённые пункты кластера для отрасли"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "median_score",
+          "settlements",
+          "population",
+          "leaders"
+        ],
+        "title": "ClusterSector"
       },
       "ClusterStats": {
         "properties": {
@@ -2690,6 +3119,328 @@
         ],
         "title": "Leader"
       },
+      "MarketCatalog": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "radius_km": {
+            "type": "number",
+            "title": "Radius Km",
+            "description": "Радиус подсчёта объектов OSM вокруг населённого пункта"
+          },
+          "min_coverage": {
+            "type": "number",
+            "title": "Min Coverage",
+            "description": "Минимальная доля веса рынков с данными, чтобы оценить отрасль"
+          },
+          "tiers": {
+            "$ref": "#/components/schemas/TierThresholds",
+            "description": "Пороги балла: high ≥ high, medium ≥ medium, иначе low"
+          },
+          "markets": {
+            "items": {
+              "$ref": "#/components/schemas/MarketInfo"
+            },
+            "type": "array",
+            "title": "Markets"
+          },
+          "sectors": {
+            "items": {
+              "$ref": "#/components/schemas/SectorInfo"
+            },
+            "type": "array",
+            "title": "Sectors"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "radius_km",
+          "min_coverage",
+          "tiers",
+          "markets",
+          "sectors",
+          "notes"
+        ],
+        "title": "MarketCatalog"
+      },
+      "MarketClusters": {
+        "properties": {
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "clusters": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterMarkets"
+            },
+            "type": "array",
+            "title": "Clusters"
+          },
+          "data_revision": {
+            "type": "integer",
+            "title": "Data Revision"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "region",
+          "clusters",
+          "data_revision",
+          "warnings"
+        ],
+        "title": "MarketClusters"
+      },
+      "MarketInfo": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/MarketPartInfo"
+            },
+            "type": "array",
+            "title": "Parts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "description",
+          "parts"
+        ],
+        "title": "MarketInfo"
+      },
+      "MarketPartInfo": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "higher_better",
+              "lower_better"
+            ],
+            "title": "Direction"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "population",
+              "ml_gravity_30",
+              "ml_gravity_60",
+              "ml_gravity_120",
+              "poi",
+              "feature"
+            ],
+            "title": "Source"
+          },
+          "scale": {
+            "$ref": "#/components/schemas/ScaleInfo"
+          },
+          "scale_text": {
+            "type": "string",
+            "title": "Scale Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "unit",
+          "direction",
+          "source",
+          "scale",
+          "scale_text"
+        ],
+        "title": "MarketPartInfo"
+      },
+      "MarketPartValue": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value",
+            "description": "Исходное значение: человек, объектов или минут; null — нет данных"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score",
+            "description": "Балл части 0–100 по её шкале"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "unit",
+          "value",
+          "score",
+          "text"
+        ],
+        "title": "MarketPartValue"
+      },
+      "MarketScore": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score",
+            "description": "Абсолютный балл 0–100 по собственным данным населённого пункта (фиксированные шкалы): среднее частей"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier",
+            "description": "Уровень по баллу: high / medium / low (пороги — в /markets/catalog)"
+          },
+          "percentile": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percentile",
+            "description": "Доп. метрика: перцентиль балла среди населённых пунктов СКФО (лучше, чем у X%)"
+          },
+          "cluster_percentile": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Percentile",
+            "description": "Доп. метрика: перцентиль балла среди населённых пунктов своего кластера А/Б/В"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/MarketPartValue"
+            },
+            "type": "array",
+            "title": "Parts"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "score",
+          "tier",
+          "percentile",
+          "cluster_percentile",
+          "parts",
+          "text"
+        ],
+        "title": "MarketScore"
+      },
       "Point": {
         "properties": {
           "lon": {
@@ -3087,6 +3838,59 @@
         ],
         "title": "RegionInfo"
       },
+      "ScaleInfo": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "log",
+              "decay"
+            ],
+            "title": "Type"
+          },
+          "zero": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zero",
+            "description": "log: значение, которому соответствует 0 баллов"
+          },
+          "full": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full",
+            "description": "log: значение, которому соответствует 100 баллов"
+          },
+          "half_life": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Half Life",
+            "description": "decay: минуты, за которые балл уменьшается вдвое"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "ScaleInfo"
+      },
       "ScenarioInfo": {
         "properties": {
           "code": {
@@ -3165,6 +3969,532 @@
           "example"
         ],
         "title": "ScenarioInfo"
+      },
+      "SectorAssessment": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score",
+            "description": "Абсолютный балл 0–100 по собственным данным населённого пункта (фиксированные шкалы): взвешенное среднее рынков с данными"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier",
+            "description": "Уровень по баллу: high / medium / low (пороги — в /markets/catalog)"
+          },
+          "percentile": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percentile",
+            "description": "Доп. метрика: перцентиль балла среди населённых пунктов СКФО (лучше, чем у X%)"
+          },
+          "cluster_percentile": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Percentile",
+            "description": "Доп. метрика: перцентиль балла среди населённых пунктов своего кластера А/Б/В"
+          },
+          "cluster_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Rank",
+            "description": "Место в кластере по баллу (1 — лучшее)"
+          },
+          "cluster_size": {
+            "type": "integer",
+            "title": "Cluster Size",
+            "description": "Сколько населённых пунктов кластера оценено для отрасли"
+          },
+          "coverage": {
+            "type": "number",
+            "title": "Coverage",
+            "description": "Доля веса рынков, по которым есть данные (0–1)"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing",
+            "description": "Рынки без данных, не учтённые в оценке"
+          },
+          "verdict": {
+            "type": "string",
+            "title": "Verdict"
+          },
+          "strengths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Strengths"
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Risks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "score",
+          "tier",
+          "percentile",
+          "cluster_percentile",
+          "cluster_rank",
+          "cluster_size",
+          "coverage",
+          "missing",
+          "verdict",
+          "strengths",
+          "risks"
+        ],
+        "title": "SectorAssessment"
+      },
+      "SectorInfo": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "examples": {
+            "type": "string",
+            "title": "Examples"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Weights",
+            "description": "Вес каждого рынка сбыта для отрасли, сумма = 1"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "examples",
+          "description",
+          "weights"
+        ],
+        "title": "SectorInfo"
+      },
+      "SectorLeader": {
+        "properties": {
+          "territory_id": {
+            "type": "integer",
+            "title": "Territory Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Code"
+          },
+          "municipality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipality"
+          },
+          "population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Population"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score",
+            "description": "Абсолютный балл 0–100 по собственным данным населённого пункта (фиксированные шкалы)"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier"
+          },
+          "percentile": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percentile",
+            "description": "Доп. метрика: перцентиль балла среди населённых пунктов СКФО (лучше, чем у X%)"
+          },
+          "cluster_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Rank"
+          }
+        },
+        "type": "object",
+        "required": [
+          "territory_id",
+          "name",
+          "region_code",
+          "municipality",
+          "population",
+          "score",
+          "tier",
+          "percentile",
+          "cluster_rank"
+        ],
+        "title": "SectorLeader"
+      },
+      "SectorRating": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "sector": {
+            "$ref": "#/components/schemas/SectorInfo"
+          },
+          "cluster": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SectorRatingItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "По убыванию балла"
+          },
+          "data_revision": {
+            "type": "integer",
+            "title": "Data Revision"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset",
+          "sector",
+          "cluster",
+          "region",
+          "items",
+          "data_revision",
+          "warnings"
+        ],
+        "title": "SectorRating"
+      },
+      "SectorRatingItem": {
+        "properties": {
+          "territory_id": {
+            "type": "integer",
+            "title": "Territory Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Code"
+          },
+          "municipality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipality"
+          },
+          "cluster": {
+            "type": "string",
+            "title": "Cluster"
+          },
+          "population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Population"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score",
+            "description": "Абсолютный балл 0–100 по собственным данным населённого пункта (фиксированные шкалы)"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier"
+          },
+          "percentile": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percentile",
+            "description": "Доп. метрика: перцентиль балла среди населённых пунктов СКФО (лучше, чем у X%)"
+          },
+          "cluster_percentile": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Percentile",
+            "description": "Доп. метрика: перцентиль балла среди населённых пунктов своего кластера А/Б/В"
+          },
+          "cluster_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Rank"
+          },
+          "cluster_size": {
+            "type": "integer",
+            "title": "Cluster Size"
+          },
+          "coverage": {
+            "type": "number",
+            "title": "Coverage"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "markets": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Markets",
+            "description": "Балл каждого рынка сбыта (0–100)"
+          },
+          "strengths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Strengths"
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Risks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "territory_id",
+          "name",
+          "region_code",
+          "municipality",
+          "cluster",
+          "population",
+          "score",
+          "tier",
+          "percentile",
+          "cluster_percentile",
+          "cluster_rank",
+          "cluster_size",
+          "coverage",
+          "missing",
+          "markets",
+          "strengths",
+          "risks"
+        ],
+        "title": "SectorRatingItem"
       },
       "SubindexInfo": {
         "properties": {
@@ -3505,6 +4835,147 @@
           "items"
         ],
         "title": "TerritoryList"
+      },
+      "TerritoryMarkets": {
+        "properties": {
+          "territory_id": {
+            "type": "integer",
+            "title": "Territory Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Code"
+          },
+          "municipality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipality"
+          },
+          "cluster": {
+            "type": "string",
+            "title": "Cluster"
+          },
+          "cluster_name": {
+            "type": "string",
+            "title": "Cluster Name"
+          },
+          "population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Population"
+          },
+          "markets": {
+            "items": {
+              "$ref": "#/components/schemas/MarketScore"
+            },
+            "type": "array",
+            "title": "Markets"
+          },
+          "sectors": {
+            "items": {
+              "$ref": "#/components/schemas/SectorAssessment"
+            },
+            "type": "array",
+            "title": "Sectors",
+            "description": "Отрасли от самой привлекательной к наименее"
+          },
+          "data_revision": {
+            "type": "integer",
+            "title": "Data Revision"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "territory_id",
+          "name",
+          "region_code",
+          "municipality",
+          "cluster",
+          "cluster_name",
+          "population",
+          "markets",
+          "sectors",
+          "data_revision",
+          "warnings"
+        ],
+        "title": "TerritoryMarkets"
+      },
+      "TierShares": {
+        "properties": {
+          "high": {
+            "type": "number",
+            "title": "High"
+          },
+          "medium": {
+            "type": "number",
+            "title": "Medium"
+          },
+          "low": {
+            "type": "number",
+            "title": "Low"
+          },
+          "unknown": {
+            "type": "number",
+            "title": "Unknown",
+            "description": "Доля без оценки (нет данных)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "high",
+          "medium",
+          "low",
+          "unknown"
+        ],
+        "title": "TierShares"
+      },
+      "TierThresholds": {
+        "properties": {
+          "high": {
+            "type": "number",
+            "title": "High"
+          },
+          "medium": {
+            "type": "number",
+            "title": "Medium"
+          }
+        },
+        "type": "object",
+        "required": [
+          "high",
+          "medium"
+        ],
+        "title": "TierThresholds"
       },
       "ValidationError": {
         "properties": {
@@ -3922,6 +5393,10 @@
     {
       "name": "what-if",
       "description": "Сценарии W1–W10 и их прогоны"
+    },
+    {
+      "name": "markets",
+      "description": "Рынки сбыта и привлекательность для отраслей производства (задачи 4+5)"
     },
     {
       "name": "profiles",

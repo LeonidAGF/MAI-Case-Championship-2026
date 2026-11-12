@@ -1,0 +1,114 @@
+# Sales markets and production sectors (tasks 4+5: economic attractiveness for entrepreneurs).
+#
+# A market is a group of indicators ("parts") computed from real data already in the backend:
+#   population     territory.population (OSM)
+#   ml_gravity_30  / ml_gravity_120: buyers within reach weighted by travel time (half-life 30 /
+#                  120 min) = ML gravity model (ml_results/settlement_gravity_observed.csv, status
+#                  provisional) x known population of the other settlements + the settlement's own
+#                  residents (zero distance; the ML sum excludes the settlement itself)
+#   poi            OSM objects (table poi) within radius_km of the settlement, weighted by category
+#   feature        a feature value F.. (minutes by car on the ML road graph)
+#
+# Score = absolute 0..100, from the settlement's own values only (independent of the others):
+#   scale log    0 at `zero` and below, 100 at `full` and above, logarithmic between (every x10 adds
+#                the same points); anchors span the range observed in СКФО (OSM 2026-11, ML provisional)
+#   scale decay  100 * 2^(-minutes / half_life): next door = 100, one half-life away = 50
+# market = mean of its parts, sector = weighted mean of the markets with data. Percentiles
+# ("better than X% of settlements in СКФО / in the cluster") and the place in the cluster are
+# returned as additional metrics.
+#
+# Anchors, half-lives and sector weights are an expert assumption of the team, not a trained model:
+# review them with the ML specialist. Validated at startup by app/markets/config.py.
+
+version: "markets-v2"
+radius_km: 20
+min_coverage: 0.5           # a sector is assessed when markets with data carry >= half of its weight
+tiers: {high: 66.7, medium: 33.3}
+
+markets:
+  local:
+    name: "Местный рынок"
+    description: "Жители самого населённого пункта: покупатели повседневных товаров"
+    parts:
+      # 1 тыс. жителей = 25, 10 тыс. = 50, 100 тыс. = 75, 1 млн = 100
+      - {key: population, source: population, label: "Жители", unit: "чел.", scale: {type: log, zero: 100, full: 1000000}}
+  catchment:
+    name: "Зона тяготения"
+    description: "Покупатели, до которых около получаса езды, вместе с жителями самого населённого пункта: доставка и поездки за покупками каждый день"
+    parts:
+      # 10 тыс. покупателей = 0, 100 тыс. = 50, 1 млн = 100
+      - {key: buyers_30, source: ml_gravity_30, label: "Покупатели в зоне получаса", unit: "чел.", scale: {type: log, zero: 10000, full: 1000000}}
+  regional:
+    name: "Региональный рынок"
+    description: "Покупатели в пределах одного-двух часов езды, вместе с местными жителями: оптовые поставки и регулярная доставка"
+    parts:
+      # 1 млн покупателей = 0, 2 млн = 50, 4 млн = 100 (в СКФО почти у всех больше 1 млн)
+      - {key: buyers_120, source: ml_gravity_120, label: "Покупатели в пределах 1–2 часов", unit: "чел.", scale: {type: log, zero: 1000000, full: 4000000}}
+  institutional:
+    name: "Институциональные заказчики"
+    description: "Школы, детские сады, больницы, поликлиники, колледжи и вузы рядом: закупки продуктов, материалов и услуг"
+    parts:
+      # 5 объектов = 29, 20 = 49, 100 = 74, 500 = 100
+      - key: institutions
+        source: poi
+        label: "Школы, сады, медицина и вузы в радиусе 20 км"
+        unit: "объектов"
+        categories: {school: 1, kindergarten: 1, hospital: 1, clinic: 1, college: 1, university: 1}
+        scale: {type: log, zero: 0, full: 500}
+  retail:
+    name: "Торговые каналы"
+    description: "Торговые центры, рынки, кафе и рестораны рядом: через них продаётся продукция"
+    parts:
+      # 1 объект = 15, 5 = 39, 20 = 66, 100 = 100
+      - {key: retail_hubs, source: poi, label: "ТЦ и рынки в радиусе 20 км", unit: "объектов", categories: {mall: 1, marketplace: 1}, scale: {type: log, zero: 0, full: 100}}
+      # 10 объектов = 39, 50 = 63, 500 = 100
+      - {key: food_service, source: poi, label: "Кафе и рестораны в радиусе 20 км", unit: "объектов", categories: {cafe: 1}, scale: {type: log, zero: 0, full: 500}}
+  interregional:
+    name: "Вывоз за пределы района"
+    description: "Сколько ехать на машине до железной дороги, аэропорта, регионального центра и крупного города: вывоз продукции в другие районы и регионы"
+    parts:
+      - {key: rail, source: feature, feature: F15, label: "До ЖД-станции", unit: "мин", scale: {type: decay, half_life: 30}}
+      - {key: airport, source: feature, feature: F16, label: "До аэропорта", unit: "мин", scale: {type: decay, half_life: 60}}
+      - {key: regional_center, source: feature, feature: F14, label: "До регионального центра", unit: "мин", scale: {type: decay, half_life: 60}}
+      - {key: big_city, source: feature, feature: F21, label: "До города от 50 тыс. жителей", unit: "мин", scale: {type: decay, half_life: 45}}
+
+# Weights of the markets for each sector, sum = 1.
+sectors:
+  food:
+    name: "Пищевое производство"
+    examples: "хлеб и выпечка, молочная и мясная продукция, напитки"
+    description: "Короткий срок хранения: главное — покупатели рядом, магазины и столовые школ и больниц"
+    weights: {local: 0.15, catchment: 0.30, regional: 0.15, institutional: 0.15, retail: 0.20, interregional: 0.05}
+  agro:
+    name: "Переработка сельхозпродукции"
+    examples: "консервы, соки, сухофрукты, мёд, мясопереработка"
+    description: "Продукция хранится долго и продаётся по всей стране: главное — вывоз и крупный региональный рынок"
+    weights: {local: 0.05, catchment: 0.10, regional: 0.25, institutional: 0.10, retail: 0.10, interregional: 0.40}
+  construction:
+    name: "Строительные материалы"
+    examples: "кирпич, бетон и ЖБИ, блоки, щебень"
+    description: "Тяжёлая продукция: выгодно возить в пределах одного-двух часов и по железной дороге"
+    weights: {local: 0.05, catchment: 0.20, regional: 0.40, institutional: 0.05, retail: 0.05, interregional: 0.25}
+  light:
+    name: "Лёгкая промышленность"
+    examples: "одежда, текстиль, обувь, ковры"
+    description: "Продаётся через торговые сети и маркетплейсы по всей стране, часть — по госзаказу (форма)"
+    weights: {local: 0.05, catchment: 0.10, regional: 0.20, institutional: 0.10, retail: 0.25, interregional: 0.30}
+  furniture:
+    name: "Мебель и деревообработка"
+    examples: "корпусная и мягкая мебель, окна и двери, изделия из дерева"
+    description: "Нужны региональный рынок, торговые точки и доставка в соседние регионы"
+    weights: {local: 0.05, catchment: 0.15, regional: 0.30, institutional: 0.10, retail: 0.20, interregional: 0.20}
+  packaging:
+    name: "Упаковка и полиграфия"
+    examples: "картонная и пластиковая упаковка, этикетки, печатная продукция"
+    description: "Продаёт другим предприятиям и учреждениям: важны заказчики и бизнес поблизости"
+    weights: {local: 0.05, catchment: 0.25, regional: 0.25, institutional: 0.20, retail: 0.15, interregional: 0.10}
+
+notes:
+  - "Балл 0–100 — абсолютная оценка по собственным данным населённого пункта: шкалы фиксированы и не зависят от других территорий."
+  - "Перцентиль (лучше, чем у X% населённых пунктов СКФО или кластера) и место в кластере — дополнительные метрики для сравнения."
+  - "Шкалы и веса рынков для отраслей — экспертная оценка команды, а не обученная модель."
+  - "Оценка показывает рынок сбыта. Аренду, кадры, сырьё, налоги и конкурентов она не учитывает."
+  - "Доступное население — гравитационная модель ML (предварительный статус): покупатели с учётом времени в пути."
+  - "Объекты — OpenStreetMap; в сёлах карта неполная, поэтому малое число объектов может означать пробел в данных."

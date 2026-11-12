@@ -2,7 +2,7 @@
 Command line: migrations, seeding, ETL loaders, reports, OpenAPI export, chat eval.
 
     python -m app.cli migrate
-    python -m app.cli seed [--demo-features]
+    python -m app.cli seed
     python -m app.cli load-features path/to/features.parquet
     python -m app.cli --help
 """
@@ -116,9 +116,20 @@ async def cmd_seed_osm(args: argparse.Namespace) -> Any:
     return out
 
 
+async def cmd_load_ml_results(args: argparse.Namespace) -> Any:
+    """ML gravity model results -> territory.meta.ml (buyers within reach for the sales markets)."""
+    from app.etl.ml_results import GRAVITY_FILE, load_ml_results
+
+    ml_dir = Path(args.ml_dir) if getattr(args, "ml_dir", None) else get_settings().ml_results_dir
+    if not (ml_dir / GRAVITY_FILE).exists():
+        return {"warning": f"{GRAVITY_FILE} not found in {ml_dir}: run scripts/15_calculate_gravity.py"}
+    return await _in_transaction("ml_results", str(ml_dir), lambda s: load_ml_results(s, ml_dir))
+
+
 async def cmd_seed(args: argparse.Namespace) -> Any:
     out = {"reference": await cmd_seed_reference(args), "territories": await cmd_load_territories(args)}
     out["osm"] = await cmd_seed_osm(args)
+    out["ml_results"] = await cmd_load_ml_results(args)
     out["knowledge"] = await cmd_seed_knowledge(args)
     return out
 
@@ -273,15 +284,20 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("--revision", default="head")
     m.add_argument("--downgrade", action="store_true")
 
-    s = sub.add_parser("seed", help="reference tables + territories + OSM objects and features (idempotent, 'make seed')")
+    s = sub.add_parser("seed", help="reference tables + territories + OSM objects and features + ML results "
+                                    "(idempotent, 'make seed')")
     s.add_argument("--data-dir")
     s.add_argument("--osm-dir", help="folder with osm_poi.csv / osm_features.csv (default OSM_DATA_DIR)")
+    s.add_argument("--ml-dir", help="folder with settlement_gravity_observed.csv (default ML_RESULTS_DIR)")
     sub.add_parser("seed-reference", help="subindices, clusters, features, presets, scenarios from the model YAML")
     lt = sub.add_parser("load-territories", help="regions, municipalities (PostGIS), settlements, clusters")
     lt.add_argument("--data-dir")
     so = sub.add_parser("seed-osm", help="OSM objects + features (osm_poi.csv / osm_features.csv in OSM_DATA_DIR), synthetic removed")
     so.add_argument("--osm-dir", help="folder with osm_poi.csv / osm_features.csv (default OSM_DATA_DIR)")
     sub.add_parser("clear-demo-features", help="remove synthetic feature values left by older versions")
+    ml = sub.add_parser("load-ml-results", help="ML gravity results (ml_results/settlement_gravity_observed.csv) "
+                                                "-> buyers within reach for the sales markets")
+    ml.add_argument("--ml-dir", help="folder with settlement_gravity_observed.csv (default ML_RESULTS_DIR)")
 
     f = sub.add_parser("load-features", help="ML feature export (long/wide, parquet/CSV)")
     f.add_argument("file")
@@ -340,6 +356,7 @@ ASYNC_COMMANDS = {
     "load-territories": cmd_load_territories,
     "seed-osm": cmd_seed_osm,
     "clear-demo-features": cmd_clear_demo,
+    "load-ml-results": cmd_load_ml_results,
     "load-features": cmd_load_features,
     "load-poi": cmd_load_poi,
     "load-travel-times": cmd_load_travel_times,

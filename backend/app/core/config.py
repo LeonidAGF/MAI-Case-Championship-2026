@@ -51,7 +51,11 @@ class Settings(BaseSettings):
     data_dir: Path = REPO_DIR / "data"
     # Real OSM objects and features computed by the ML part (scripts/20-21): osm_poi.csv, osm_features.csv.
     osm_data_dir: Path = REPO_DIR / "geo-embeddings" / "data"
+    # ML gravity model results (settlement_gravity_observed.csv): buyers within reach for the sales markets.
+    ml_results_dir: Path = REPO_DIR / "ml_results"
     seeds_dir: Path = BACKEND_DIR / "seeds"
+    # Sales markets and production sectors (tasks 4+5): parts, market weights per sector.
+    markets_config_path: Path = BACKEND_DIR / "config" / "markets.default.yaml"
 
     # --- profile contract (section 9.2) ------------------------------------
     profile_param_max_len: int = 2000

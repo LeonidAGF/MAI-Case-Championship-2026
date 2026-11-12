@@ -375,3 +375,191 @@ class HealthResponse(BaseModel):
     scoring_engine: str
     checks: dict[str, str]
     data_revision: int | None
+
+
+# --- sales markets and production sectors (tasks 4+5) ------------------------------
+Tier = Literal["high", "medium", "low"]
+SCORE_DOC = "Абсолютный балл 0–100 по собственным данным населённого пункта (фиксированные шкалы)"
+TIER_DOC = "Уровень по баллу: high / medium / low (пороги — в /markets/catalog)"
+PCT_SKFO = "Доп. метрика: перцентиль балла среди населённых пунктов СКФО (лучше, чем у X%)"
+PCT_CLUSTER = "Доп. метрика: перцентиль балла среди населённых пунктов своего кластера А/Б/В"
+
+
+class ScaleInfo(BaseModel):
+    type: Literal["log", "decay"]
+    zero: float | None = Field(None, description="log: значение, которому соответствует 0 баллов")
+    full: float | None = Field(None, description="log: значение, которому соответствует 100 баллов")
+    half_life: float | None = Field(None, description="decay: минуты, за которые балл уменьшается вдвое")
+
+
+class MarketPartInfo(BaseModel):
+    key: str
+    label: str
+    unit: str
+    direction: Literal["higher_better", "lower_better"]
+    source: Literal["population", "ml_gravity_30", "ml_gravity_60", "ml_gravity_120", "poi", "feature"]
+    scale: ScaleInfo
+    scale_text: str
+
+
+class MarketInfo(BaseModel):
+    code: str
+    name: str
+    description: str
+    parts: list[MarketPartInfo]
+
+
+class SectorInfo(BaseModel):
+    code: str
+    name: str
+    examples: str
+    description: str
+    weights: dict[str, float] = Field(description="Вес каждого рынка сбыта для отрасли, сумма = 1")
+
+
+class TierThresholds(BaseModel):
+    high: float
+    medium: float
+
+
+class MarketCatalog(BaseModel):
+    version: str
+    radius_km: float = Field(description="Радиус подсчёта объектов OSM вокруг населённого пункта")
+    min_coverage: float = Field(description="Минимальная доля веса рынков с данными, чтобы оценить отрасль")
+    tiers: TierThresholds = Field(description="Пороги балла: high ≥ high, medium ≥ medium, иначе low")
+    markets: list[MarketInfo]
+    sectors: list[SectorInfo]
+    notes: list[str]
+
+
+class MarketPartValue(BaseModel):
+    key: str
+    label: str
+    unit: str
+    value: float | None = Field(description="Исходное значение: человек, объектов или минут; null — нет данных")
+    score: float | None = Field(description="Балл части 0–100 по её шкале")
+    text: str
+
+
+class MarketScore(BaseModel):
+    code: str
+    name: str
+    score: float | None = Field(description=f"{SCORE_DOC}: среднее частей")
+    tier: Tier | None = Field(description=TIER_DOC)
+    percentile: float | None = Field(description=PCT_SKFO)
+    cluster_percentile: float | None = Field(description=PCT_CLUSTER)
+    parts: list[MarketPartValue]
+    text: str
+
+
+class SectorAssessment(BaseModel):
+    code: str
+    name: str
+    score: float | None = Field(description=f"{SCORE_DOC}: взвешенное среднее рынков с данными")
+    tier: Tier | None = Field(description=TIER_DOC)
+    percentile: float | None = Field(description=PCT_SKFO)
+    cluster_percentile: float | None = Field(description=PCT_CLUSTER)
+    cluster_rank: int | None = Field(description="Место в кластере по баллу (1 — лучшее)")
+    cluster_size: int = Field(description="Сколько населённых пунктов кластера оценено для отрасли")
+    coverage: float = Field(description="Доля веса рынков, по которым есть данные (0–1)")
+    missing: list[str] = Field(description="Рынки без данных, не учтённые в оценке")
+    verdict: str
+    strengths: list[str]
+    risks: list[str]
+
+
+class TerritoryMarkets(BaseModel):
+    territory_id: int
+    name: str
+    region_code: str | None
+    municipality: str | None
+    cluster: str
+    cluster_name: str
+    population: int | None
+    markets: list[MarketScore]
+    sectors: list[SectorAssessment] = Field(description="Отрасли от самой привлекательной к наименее")
+    data_revision: int
+    warnings: list[str]
+
+
+class TierShares(BaseModel):
+    high: float
+    medium: float
+    low: float
+    unknown: float = Field(description="Доля без оценки (нет данных)")
+
+
+class SectorLeader(BaseModel):
+    territory_id: int
+    name: str
+    region_code: str | None
+    municipality: str | None
+    population: int | None
+    score: float | None = Field(description=SCORE_DOC)
+    tier: Tier | None
+    percentile: float | None = Field(description=PCT_SKFO)
+    cluster_rank: int | None
+
+
+class ClusterMarket(BaseModel):
+    code: str
+    name: str
+    median_score: float | None = Field(description="Медиана балла рынка по населённым пунктам кластера")
+    medians: dict[str, float | None] = Field(description="Медианы исходных значений частей рынка")
+    settlements: TierShares = Field(description="Доли населённых пунктов кластера по уровню рынка")
+    population: TierShares = Field(description="То же, взвешенное по известному населению")
+
+
+class ClusterSector(BaseModel):
+    code: str
+    name: str
+    median_score: float | None = Field(description="Медиана балла отрасли по населённым пунктам кластера")
+    settlements: TierShares
+    population: TierShares
+    leaders: list[SectorLeader] = Field(description="Лучшие населённые пункты кластера для отрасли")
+
+
+class ClusterMarkets(BaseModel):
+    cluster: str
+    cluster_name: str
+    settlements: int
+    settlements_with_population: int
+    population_known: int
+    markets: list[ClusterMarket]
+    sectors: list[ClusterSector]
+
+
+class MarketClusters(BaseModel):
+    region: str | None
+    clusters: list[ClusterMarkets]
+    data_revision: int
+    warnings: list[str]
+
+
+class SectorRatingItem(BaseModel):
+    territory_id: int
+    name: str
+    region_code: str | None
+    municipality: str | None
+    cluster: str
+    population: int | None
+    score: float | None = Field(description=SCORE_DOC)
+    tier: Tier | None
+    percentile: float | None = Field(description=PCT_SKFO)
+    cluster_percentile: float | None = Field(description=PCT_CLUSTER)
+    cluster_rank: int | None
+    cluster_size: int
+    coverage: float
+    missing: list[str]
+    markets: dict[str, float | None] = Field(description="Балл каждого рынка сбыта (0–100)")
+    strengths: list[str]
+    risks: list[str]
+
+
+class SectorRating(Page):
+    sector: SectorInfo
+    cluster: str | None
+    region: str | None
+    items: list[SectorRatingItem] = Field(description="По убыванию балла")
+    data_revision: int
+    warnings: list[str]
