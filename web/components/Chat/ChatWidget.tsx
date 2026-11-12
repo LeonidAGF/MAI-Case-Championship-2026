@@ -100,7 +100,7 @@ export function ChatWidget() {
 						{messages.length === 0 && (
 							<div className="text-center text-gray-400 mt-10 px-4">
 								<p className="text-sm">Спросите о методике индекса или доступности территорий Северного Кавказа.</p>
-								<p className="text-sm mt-2">Спросите, например: "Где в Дагестане лучше всего с детскими садами?"</p>
+								<p className="text-sm mt-2">Спросите, например: "Где в Дагестане лучше всего с больницами?"</p>
 							</div>
 						)}
 

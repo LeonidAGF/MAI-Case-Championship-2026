@@ -96,7 +96,7 @@ export function ProfileBuilder() {
 				Настроить
 			</summary>
 		
-			<div className="absolute right-0 z-20 mt-2 w-80 bg-white shadow-2xl border border-gray-100 rounded-xl p-4 text-sm space-y-3">
+			<div className="absolute left-0 z-20 mt-2 w-80 bg-white shadow-2xl border border-gray-100 rounded-xl p-4 text-sm space-y-3">
 				<h3 className="font-bold text-gray-800 border-b pb-1 mb-2">Фильтры</h3>
 				
 				<Field label="Мобильность" value={f.mobility}
