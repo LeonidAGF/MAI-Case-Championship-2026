@@ -1,4 +1,5 @@
-"""DEV ONLY: deterministic synthetic feature values so the frontend can integrate before ML's
+"""
+DEV ONLY: deterministic synthetic feature values so the frontend can integrate before ML's
 real features are loaded. Every value is tagged source='synthetic-demo' and as_of=1900-01-01;
 /healthz and /data/coverage report it loudly. Never present these numbers as real.
 Remove with `python -m app.cli clear-demo-features`.

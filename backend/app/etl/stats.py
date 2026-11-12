@@ -1,4 +1,5 @@
-"""Municipal statistics parsers (BE2 stage 1): ЕМИСС / Росстат БДМО (incl. «Точно» exports) /
+"""
+Municipal statistics parsers (BE2 stage 1): ЕМИСС / Росстат БДМО (incl. «Точно» exports) /
 ФНС aggregates / wide Rosstat tables -> feature_value at municipality (or subject) level.
 
 Layouts (auto-detected; headers matched case-insensitively, ё = е):

@@ -1,4 +1,5 @@
-"""Name normalization and municipality matching (cross-check of names / OKTMO, BE2 stage 1).
+"""
+Name normalization and municipality matching (cross-check of names / OKTMO, BE2 stage 1).
 
 Statistics files name municipalities in many ways: «Курский район», «Курский муниципальный
 округ», «МО "Курский муниципальный округ"», «г. Ставрополь», «городской округ город

@@ -86,13 +86,6 @@ npm run dev    # приложение на http://localhost:3000
 `PROMETHEUS_PORT`, `LOKI_PORT`. Grafana работает на 3001, потому что порт 3000 занимает фронтенд.
 Grafana, Prometheus и Loki слушают только `127.0.0.1`: мониторинг рассчитан на локальный показ.
 
-### Остановка
-
-```bash
-docker compose down       # остановить; данные базы и мониторинга сохранятся
-docker compose down -v    # остановить и удалить все данные; после этого снова нужен seed
-```
-
 ### Включить чат
 
 Добавьте ключ GigaChat в `backend/.env` (`GIGACHAT_CREDENTIALS=...`) и пересоздайте контейнер
@@ -116,17 +109,6 @@ uvicorn app.main:app --reload
 В Linux, macOS и WSL есть короткие команды из `Makefile`: `make up`, `make seed`,
 `make seed-demo`, `make logs`, `make test`, `make openapi`.
 
-### Если что-то не работает
-
-| Симптом | Что сделать |
-|---|---|
-| Порт уже занят | Поменяйте нужный `*_PORT` в `backend/.env` и выполните `docker compose up -d`. |
-| Чат отвечает «Чат не настроен: нет ключа GigaChat» | Добавьте `GIGACHAT_CREDENTIALS` в `backend/.env` и выполните `docker compose up -d api`. |
-| Ошибка ключа или `CERTIFICATE_VERIFY_FAILED` в чате | `docker compose run --rm api python -m app.cli chat-check` покажет, в чём проблема. |
-| `/healthz` показывает `feature_data: empty` | Признаки не загружены: `seed-demo-features` для разработки или `load-features` с данными ML. |
-| Панели Grafana пустые | Откройте несколько страниц приложения и подождите: графики строятся по окну 5 минут. |
-| Интеграционные тесты пропускаются | Не задан `TEST_DATABASE_URL`, см. [Тесты](#тесты). |
-
 ## Синтетические данные
 
 > **Важно.** `seed-demo-features` создаёт не реальную статистику, а правдоподобные выдуманные
@@ -140,9 +122,6 @@ uvicorn app.main:app --reload
   показывает 1, а в Prometheus срабатывает правило `AtlasSyntheticDataPresent`.
 - «Полнота данных» в этом режиме означает лишь, что демозначение есть, а не что оно достоверно.
   «Возраст источника» тоже не относится к реальным измерениям.
-
-Перед защитой удалите синтетику и загрузите проверенный экспорт признаков F01–F30 от ML. Файл
-положите в папку `data` в корне репозитория: в контейнере она видна как `/data`.
 
 ```bash
 docker compose run --rm api python -m app.cli clear-demo-features
@@ -198,7 +177,7 @@ tests/             unit- и интеграционные тесты
 `python -m app.cli export-openapi`. Ниже все 10 эндпоинтов из таблицы 10 отчёта и вспомогательные.
 
 | Назначение | Эндпоинты |
-|---|---|
+|--------------------|----------------------------------|
 | Территории и карта | `GET /territories` — список с фильтрами `level`, `cluster`, `region`, `parent_id`, `q`, `bbox` и пагинацией; `GET /territories/geojson` — слои карты (`with_index` добавляет индекс); `GET /territories/{id}` — карточка территории |
 | Индекс | `GET /index?territory_id=…` или `?cluster=…`; параметры `sort`, `region`, `scenario_run_id` и `group_by=municipality\|region` для заливки карты по районам или субъектам |
 | Объяснение | `GET /explain/{id}` — водопад вкладов, три главных плюса и минуса |

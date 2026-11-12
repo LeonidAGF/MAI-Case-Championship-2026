@@ -1,4 +1,5 @@
-"""Feature matrix assembly: latest values per territory with mode resolution and inheritance.
+"""
+Feature matrix assembly: latest values per territory with mode resolution and inheritance.
 
 * mode: travel-time features may exist per mobility mode (feature_value.mode = car|foot);
   a profile's mode is preferred, then 'any', then the other mode (flagged via value_mode).

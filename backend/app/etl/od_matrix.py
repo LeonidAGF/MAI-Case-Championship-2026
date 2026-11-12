@@ -1,4 +1,5 @@
-"""Inter-city travel-time matrix («Точно», ~180 cities) -> normalized pairs (+ optional F14/F21).
+"""
+Inter-city travel-time matrix («Точно», ~180 cities) -> normalized pairs (+ optional F14/F21).
 
 Layouts: long (from, to, time) or square (first column = city, other columns = cities).
 Units: minutes by default; hours when the time header mentions час/hour or --unit hours.
