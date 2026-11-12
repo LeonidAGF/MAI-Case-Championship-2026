@@ -1413,7 +1413,7 @@
         "tags": [
           "chat"
         ],
-        "summary": "Чат-ассистент (SSE). Числа — только из базы через function calling",
+        "summary": "Чат-ассистент на Claude (SSE). Числа — только из базы через вызовы инструментов",
         "operationId": "chat_chat_post",
         "requestBody": {
           "content": {
@@ -1602,15 +1602,14 @@
           },
           "content": {
             "type": "string",
-            "minLength": 1,
-            "title": "Content"
+            "title": "Content",
+            "default": ""
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "role",
-          "content"
+          "role"
         ],
         "title": "ChatMessage"
       },

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.deps import get_container, rate_limit
 from app.api.schemas import ProfileRef
+from app.chat.service import normalize_history
 from app.core.errors import ERROR_RESPONSES, ServiceUnavailable, ValidationFailed
 
 router = APIRouter(tags=["chat"])
@@ -16,7 +17,8 @@ router = APIRouter(tags=["chat"])
 class ChatMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
     role: Literal["user", "assistant"]
-    content: str = Field(..., min_length=1)
+    # Empty messages are accepted and dropped (e.g. an assistant reply that never arrived).
+    content: str = ""
 
 
 class ChatRequest(BaseModel):
@@ -33,7 +35,7 @@ class ChatRequest(BaseModel):
         503: ERROR_RESPONSES[404] | {"description": "Чат отключён"},
         **{k: v for k, v in ERROR_RESPONSES.items() if k in (422, 429)},
     },
-    summary="Чат-ассистент (SSE). Числа — только из базы через function calling",
+    summary="Чат-ассистент на Claude (SSE). Числа — только из базы через вызовы инструментов",
 )
 async def chat(body: ChatRequest, request: Request) -> StreamingResponse:
     c = get_container(request)
@@ -43,10 +45,11 @@ async def chat(body: ChatRequest, request: Request) -> StreamingResponse:
         raise ValidationFailed(f"Не более {c.settings.chat_max_messages} сообщений в истории", code="chat_too_long")
     if any(len(m.content) > c.settings.chat_max_message_chars for m in body.messages):
         raise ValidationFailed(f"Сообщение длиннее {c.settings.chat_max_message_chars} символов", code="chat_message_too_long")
-    if body.messages[-1].role != "user":
+    history = normalize_history([m.model_dump() for m in body.messages])
+    if not history or history[-1]["role"] != "user":
         raise ValidationFailed("Последнее сообщение должно быть от пользователя", code="chat_last_not_user")
     profile = c.profiles.resolve(body.profile)
-    stream = c.chat.stream([m.model_dump() for m in body.messages], profile)
+    stream = c.chat.stream(history, profile)
     return StreamingResponse(
         stream,
         media_type="text/event-stream",

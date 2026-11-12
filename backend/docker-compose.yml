@@ -43,12 +43,15 @@ services:
       DATABASE_URL: postgresql+asyncpg://atlas:atlas@db:5432/atlas
       REDIS_URL: redis://redis:6379/0
       DATA_DIR: /data
+      OSM_DATA_DIR: /osm
       LOG_DIR: /var/log/atlas
       EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
       EMBEDDINGS_OFFLINE: ${EMBEDDINGS_OFFLINE:-true}
     volumes:
       # ML outputs (parquet) from the repository root, read-only.
       - ../data:/data:ro
+      # Real OSM objects and features (CSV, scripts/20-21), read-only.
+      - ../geo-embeddings/data:/osm:ro
       - api-logs:/var/log/atlas
     ports:
       - "${API_PORT:-8000}:8000"

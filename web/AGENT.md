@@ -35,10 +35,10 @@ State on 2026-11-12:
 
 - `npm run build` passes. All routes (`/`, `/compare`, `/whatif`) prerender as static pages.
   `next build` does not run ESLint.
-- `npm run lint` **fails on existing code**: 32 errors in source files (25×
+- `npm run lint` **fails on existing code**: 30 errors in source files (25×
   `@typescript-eslint/no-explicit-any`, 14 of them in `lib/api.ts`; 4×
-  `react-hooks/set-state-in-effect`; 2× `react/no-unescaped-entities` in `ChatWidget.tsx`; 1×
-  `prefer-const` in `ProfileBuilder.tsx`), plus about 1,100 warnings from the minified
+  `react-hooks/set-state-in-effect`; 1× `prefer-const` in `ProfileBuilder.tsx`), plus about 1,100
+  warnings from the minified
   `public/maplibre/maplibre-gl-worker.mjs`, which is not in `globalIgnores`. Don't add new errors,
   and fix the old ones in files you touch when it's cheap.
 - `next/font/google` (Inter, latin + cyrillic) downloads the font at build time, so a build needs
@@ -48,7 +48,7 @@ The API base URL is `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`), set
 `web/.env.local`, which is gitignored by the root `.env*` rule. It is inlined at build time, so
 rebuild after changing it. The backend must list the web origin in `CORS_ORIGINS`. To check
 something manually, run the backend (`docker compose up -d` in `backend/`, plus `seed` and
-`seed-demo-features`) and confirm http://localhost:8000/healthz first.
+loads the real OSM data) and confirm http://localhost:8000/healthz first.
 
 ## Layout
 
@@ -65,9 +65,11 @@ components/
   Profile/ProfileBuilder.tsx  filters -> weights derived on the client, normalized to 100
   Compare/CompareView.tsx     POST /compare, cards + SVG radar + summary
   WhatIf/WhatIfPanel.tsx      form built from GET /whatif/scenarios, POST /whatif/run, results table
-  Chat/ChatWidget.tsx         floating chat, SSE stream via streamChat
+  Chat/ChatWidget.tsx         floating chat, SSE stream via streamChat; a failed or empty turn is rolled
+                              back (the question returns to the input), so the history sent to /chat
+                              holds only answered exchanges
   ShareButton/ShareButton.tsx copies the current URL
-  ProfileBootstrapper.tsx     restores the profile from the URL or localStorage (not mounted, see gaps)
+  ProfileBootstrapper.tsx     restores the profile from ?p= or localStorage after hydration (mounted in layout)
 lib/
   api.ts       the only backend client: API base, ApiError, TS types, fetch helpers, SSE parser
   profile.ts   profile <-> base64url JSON (`p`), URL and localStorage (`atlas:profile`) persistence
@@ -116,12 +118,10 @@ public/maplibre/  MapLibre worker served to the browser (copied from the maplibr
 
 ## Known gaps (as of 2026-11-12)
 
-- `ProfileBootstrapper` is not mounted in `app/layout.tsx`. `setProfile` writes the profile to the
-  URL and localStorage, but nothing reads it on load, so shared links don't restore the profile.
 - `ProfilePicker` duplicates preset weights and filters from the backend YAML (the realtor weights
   are already rescaled to 100). `GET /profiles/presets` returns them along with a ready `p`.
 - `ProfileBuilder` derives weights from filters with client-side heuristics that don't exist in
   the backend.
-- `/compare` starts with hardcoded ids `[1, 2]` and offers only the first 50 scored settlements.
-  Comparing territories from different clusters returns `422 cluster_mismatch`.
+- `/compare` offers only the 50 largest scored settlements. Comparing territories from different
+  clusters returns `422 cluster_mismatch`.
 - `WhatIfPanel` hardcodes the airport list for W8.

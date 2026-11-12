@@ -19,7 +19,7 @@ from sqlalchemy import text
 from app.container import Container, build_container
 from app.core.config import BACKEND_DIR, REPO_DIR, Settings
 from app.db.session import make_engine, make_sessionmaker
-from app.etl.demo import seed_demo_features
+from tests.synthetic import seed_demo_features
 from app.etl.reference import seed_reference
 from app.etl.runs import finish_run, start_run
 from app.etl.territories import load_territories
@@ -62,10 +62,11 @@ def test_settings() -> Settings:
         osrm_car_url="",
         osrm_foot_url="",
         data_dir=REPO_DIR / "data",
-        # Never reach the real GigaChat from tests (Settings also reads backend/.env): fakes are injected per test.
-        gigachat_credentials=None,
-        gigachat_model="GigaChat-3-Pro",
-        gigachat_temperature=None,
+        # Never reach the real Anthropic API from tests (Settings also reads backend/.env, which may hold a
+        # real key): fakes are injected per test.
+        anthropic_api_key=None,
+        llm_model="claude-sonnet-5-5",
+        llm_effort="medium",
     )
 
 

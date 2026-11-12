@@ -1,0 +1,181 @@
+{
+  "created_utc": "2026-11-12T15:52:29+00:00",
+  "osm_base": "2026-11-11T21:22:47Z",
+  "as_of": "2026-11-11",
+  "mode": "car (generalized_time_s)",
+  "settlements": 3403,
+  "settlements_on_graph": 3403,
+  "objects": 15372,
+  "objects_snapped": 15354,
+  "objects_by_category": {
+    "airport": 7,
+    "ambulance": 23,
+    "bus_station": 145,
+    "cafe": 4147,
+    "cinema": 87,
+    "clinic": 762,
+    "college": 200,
+    "community_centre": 600,
+    "hospital": 1052,
+    "kindergarten": 1191,
+    "mall": 506,
+    "marketplace": 236,
+    "park": 919,
+    "railway_station": 280,
+    "school": 2471,
+    "sports": 2554,
+    "university": 174
+  },
+  "snap_max_m": 3000,
+  "walk_m": 1000,
+  "city_population": 50000,
+  "features": {
+    "F01": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 10.4,
+      "p90": 32.31,
+      "max": 122.42
+    },
+    "F02": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 21.92,
+      "p90": 50.97,
+      "max": 156.09
+    },
+    "F03": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 9.0,
+      "p90": 43.4,
+      "max": 184.0
+    },
+    "F04": {
+      "mode": "any",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 10.38,
+      "p90": 32.15,
+      "max": 122.42
+    },
+    "F05": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 17.29,
+      "p90": 45.15,
+      "max": 163.98
+    },
+    "F06": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 5.24,
+      "p90": 21.1,
+      "max": 101.84
+    },
+    "F07": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 38.43,
+      "p90": 95.48,
+      "max": 218.4
+    },
+    "F08": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 3.0,
+      "p90": 16.0,
+      "max": 95.0
+    },
+    "F09": {
+      "mode": "any",
+      "settlements": 3403,
+      "min": 0.0,
+      "median": 0.0,
+      "p90": 1.0,
+      "max": 129.0
+    },
+    "F10": {
+      "mode": "any",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 1.0,
+      "p90": 1.0,
+      "max": 1.0
+    },
+    "F11": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 1.0,
+      "p90": 14.0,
+      "max": 256.0
+    },
+    "F12": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 0.0,
+      "p90": 12.36,
+      "max": 952.91
+    },
+    "F13": {
+      "mode": "any",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 0.0,
+      "p90": 1.0,
+      "max": 1.0
+    },
+    "F14": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 112.46,
+      "p90": 202.8,
+      "max": 346.37
+    },
+    "F15": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 40.77,
+      "p90": 146.76,
+      "max": 277.24
+    },
+    "F16": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 4.82,
+      "median": 99.46,
+      "p90": 180.84,
+      "max": 292.17
+    },
+    "F17": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 30.82,
+      "p90": 71.81,
+      "max": 162.63
+    },
+    "F21": {
+      "mode": "car",
+      "settlements": 3387,
+      "min": 0.0,
+      "median": 60.41,
+      "p90": 136.08,
+      "max": 237.77
+    }
+  },
+  "rows": 60982,
+  "elapsed_s": 37.9,
+  "license": "(c) OpenStreetMap contributors, ODbL 1.0"
+}

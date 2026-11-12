@@ -41,6 +41,8 @@ you have the original inputs. When you touch a script, prefer making its paths c
 | `scripts/15_calculate_gravity.py` | same + `settlements.parquet` (population) | `settlement_gravity_observed.{parquet,csv}` + report | Requires exactly 3,403 settlements |
 | `scripts/17_calculate_index.py` | closeness + gravity | `settlement_index_provisional.{parquet,csv}`, `settlement_ranking.csv`, `index_report.json` | Weights 0.5 / 0.5, status `provisional` |
 | `scripts/18_aggregate_municipal_index.py` | index + `settlements_working.parquet` | `municipal_index_provisional.*`, `municipal_ranking.csv`, `municipal_issues.csv`, report | Unweighted mean, plus a population-weighted mean over known population |
+| `scripts/20_fetch_osm_poi.py` | Geofabrik extract `north-caucasus-fed-district-latest.osm.pbf` (downloaded into gitignored `data/raw/`) | `geo-embeddings/data/osm_poi.csv`, `osm_poi_report.json` | **Runnable from a fresh clone.** OSM objects for features F01–F17 (categories match `backend/app/etl/poi.py`), ~10 s |
+| `scripts/21_calculate_osm_features.py` | `graph/*.parquet`, `data/settlements*.parquet`, `osm_poi.csv`, `backend/seeds/*.csv` | `geo-embeddings/data/osm_features.csv`, `osm_features_report.json` | **Runnable from a fresh clone.** Car times on the graph (scipy Dijkstra over `generalized_time_s`), counts within 15/30 min, F14, F21 |
 | `geo-embeddings/scripts/07_prepare_graphsage_data.py` | `results/geo_embeddings/small_graph_{infrastructure_features,edges}.csv` | `graphsage_x.npy`, `graphsage_edge_index.npy`, ids, metadata | 20 node features, see below |
 | `geo-embeddings/scripts/08_train_graphsage.py` | the `.npy` files | embeddings, `graphsage_model.pt`, training metrics | CPU torch |
 | `geo-embeddings/scripts/09_evaluate_embeddings.py` | embeddings + geo/infra CSVs | `graphsage_similar_settlements.csv`, `graphsage_embedding_evaluation.json` | These outputs are not committed |
@@ -63,7 +65,9 @@ you have the original inputs. When you touch a script, prefer making its paths c
 | `ml_results/settlement_gravity_observed.csv` | 3,403 | step 15 |
 | `ml_results/settlement_index_provisional.csv` | 3,403 | step 17 (`transport_index` ranges 0–26 on the 0–100 scale) |
 | `ml_results/municipal_index_provisional.parquet` | 144 | step 18 |
-| `geo-embeddings/data/*` | 500 nodes | GraphSAGE inputs, embeddings (500 × 32), model, metrics |
+| `geo-embeddings/data/*` (graphsage_*) | 500 nodes | GraphSAGE inputs, embeddings (500 × 32), model, metrics |
+| `geo-embeddings/data/osm_poi.csv` | ~15,400 | OSM objects (step 20): `external_id, osm_type, osm_id, category, name, lon, lat, area_ha` + key tags |
+| `geo-embeddings/data/osm_features.csv` | long format | Features (step 21): `settlement_osm_id, feature_code, raw_value, mode, as_of` |
 
 Facts to keep consistent across docs and code:
 
@@ -95,6 +99,29 @@ Facts to keep consistent across docs and code:
   The dense N×N adjacency and the O(N²) negative enumeration won't scale far beyond the 500-node
   pilot.
 
+## OSM features (steps 20–21)
+
+OpenStreetMap is read once, by these scripts; the results are committed as CSV in
+`geo-embeddings/data/` and the backend loads them on `seed`. Nothing queries OSM at request time.
+To refresh: `python scripts/20_fetch_osm_poi.py --refresh`, then `python scripts/21_calculate_osm_features.py`,
+then `python -m app.cli seed-osm` in `backend/`.
+
+- **Times (minutes by car, mode `car`)**: F01 hospital, F02 clinic / doctors / FAP, F04 ambulance base
+  (ambulance stations *or hospitals*: OSM maps only ~20 stations in СКФО, crews of district hospitals
+  are based at hospitals — a proxy), F05 kindergarten, F06 school, F07 college or university,
+  F15 railway station or halt, F16 airport with an IATA code (7), F17 bus station; F14 capital of the
+  settlement's own subject (`backend/seeds/regions.csv`); F21 nearest settlement over 50,000 (OSM population).
+- **Within a limit by car (mode `car`)**: F03 hospitals + clinics within 30 min, F08 schools within
+  15 min, F11 sports facilities within 15 min, F12 park area (ha) within 15 min.
+- **Mode `any`**: F09 cafés and restaurants within 1 km (straight line); F10 cinema or house of culture
+  within 15 min (1/0); F13 mall or market within 15 min (1/0).
+- Objects farther than 3 km from the main road component are dropped; settlements the graph can't
+  reach get no value. Walking or public transport times are not computed (profiles without a car
+  fall back to car times, flagged by the backend).
+- Not in OSM, so not computed: F18–F20, F22–F30 (Rosstat, ФНС, ЕМИСС statistics; Open-Meteo climate).
+- OSM coverage is uneven (rural kindergartens, FAPs and houses of culture are often unmapped), so
+  low counts can mean missing map data. Data (c) OpenStreetMap contributors, ODbL 1.0.
+
 ## Contract with the backend
 
 The backend (`backend/`) only reads ML files. Change these interfaces together with the backend
@@ -118,9 +145,12 @@ code, or tell the backend owner:
 5. **POI, travel-time matrix, OSRM** for exact what-if: `load-poi`, `load-travel-times`,
    `OSRM_CAR_URL` / `OSRM_FOOT_URL`.
 
-The backend does not use `ml_results/*` or `geo-embeddings/data/*` yet, and Docker mounts only
-`data/` into the API container. To expose ML results in the product, add a loader in `backend/app/etl/`
-rather than reading these files from request handlers.
+6. **OSM data**: `geo-embeddings/data/osm_poi.csv` and `osm_features.csv` are loaded by `seed`
+   (`OSM_DATA_DIR`, mounted as `/osm` in Docker). Keep their column names, or update
+   `backend/app/cli.py` (`cmd_seed_osm`) and the loaders together.
+
+The backend does not use `ml_results/*` or the GraphSAGE files yet. To expose ML results in the
+product, add a loader in `backend/app/etl/` rather than reading these files from request handlers.
 
 ## Conventions
 
@@ -136,9 +166,10 @@ rather than reading these files from request handlers.
 
 ## Environment
 
-- No requirements file exists. The scripts use pyarrow, duckdb, numpy, pandas, scipy,
-  python-igraph, leidenalg and CPU torch. `backend/.venv` has pyarrow and numpy but not pandas or
-  duckdb; create a separate venv for ML work and don't add ML dependencies to `backend/pyproject.toml`.
+- Steps 20–21 have `scripts/requirements-osm.txt` (httpx, numpy, scipy, pyarrow, osmium). The older
+  scripts have no requirements file; they use pyarrow, duckdb, numpy, pandas, scipy, python-igraph,
+  leidenalg and CPU torch. Create a separate venv for ML work and don't add ML dependencies to
+  `backend/pyproject.toml`.
 - The full graph is large (4.6 M edges): reading `graph/edges.parquet` into pandas needs several GB
   of RAM. Read only the columns you need (`pq.read_table(path, columns=[...])`).
 - New files larger than about 50 MB go through Git LFS (see `.gitattributes`).

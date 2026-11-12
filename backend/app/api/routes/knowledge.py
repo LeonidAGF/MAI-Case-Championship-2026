@@ -41,7 +41,7 @@ async def search(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     c = get_container(request)
-    hits = await retrieve(session, q, top_k=limit, embedder=c.chat.embedder() if c.chat else None)
+    hits = await retrieve(session, q, top_k=limit, embedder=(await c.chat.embedder()) if c.chat else None)
     for hit in hits:
         hit["source_url"] = hit["source_url"] or f"/knowledge/chunks/{hit['id']}"
     return {"query": q, "hits": hits}

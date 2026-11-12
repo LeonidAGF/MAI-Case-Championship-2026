@@ -26,6 +26,7 @@ def test_number_format() -> None:
     assert fmt_num(-3.2) == "−3,2"
     assert fmt_num(2.0, signed=True) == "+2"
     assert fmt_minutes(47.4) == "47 минут"
+    assert fmt_minutes(0.38) == "меньше минуты" and fmt_minutes(0.6) == "1 минута"
 
 
 def test_examples_from_the_report() -> None:
@@ -51,3 +52,10 @@ def test_round_preserving_sum(values: list[float]) -> None:
     rounded = round_preserving_sum(values, target)
     assert round(sum(rounded), 1) == target
     assert all(abs(a - b) < 0.1 + 1e-9 for a, b in zip(rounded, values, strict=True))
+
+
+def test_feature_without_data_in_the_cluster_is_not_called_an_estimate() -> None:
+    excluded = fact_text("F24", None, name="Число дискомфортных дней", unit="дней/год", excluded=True)
+    assert excluded == "Число дискомфортных дней: нет данных — признак не участвует в расчёте"
+    imputed = fact_text("F01", None, name="Время до ближайшей больницы", unit="мин", imputed=True)
+    assert imputed.endswith("принята типичная для кластера оценка")

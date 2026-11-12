@@ -31,18 +31,20 @@ export function ChatWidget() {
 	}, [messages, isLoading]);
 
 	const handleSend = async () => {
-		if (!input.trim() || isLoading) return;
+		const text = input.trim();
+		if (!text || isLoading) return;
 
-		const userMsg: Message = { role: 'user', content: input.trim() };
-		const historyToSend = [...messagesRef.current, userMsg]; 
-		
+		// Only answered exchanges go to the API: never an empty reply or a question left without an answer.
+		const answered = messagesRef.current.filter((m) => m.content.trim());
+		const historyToSend: Message[] = [...answered, { role: 'user', content: text }];
+
 		setMessages([...historyToSend, { role: 'assistant', content: '' }]);
 		setInput('');
 		setIsLoading(true);
 		setError(null);
 
+		let assistantText = '';
 		try {
-			let assistantText = '';
 			await streamChat(historyToSend, profile, (chunk) => {
 				assistantText += chunk;
 				setMessages((prev) => {
@@ -51,10 +53,13 @@ export function ChatWidget() {
 					return newArr;
 				});
 			});
+			if (!assistantText.trim()) throw new Error('Ассистент не дал ответа — попробуйте переформулировать вопрос');
 		} catch (e: unknown) {
 			console.error(e);
 			setError(e instanceof Error ? e.message : 'Произошла ошибка при обращении к ИИ');
-			setMessages((prev) => prev.slice(0, -1));
+			// Roll the failed exchange back and return the question to the input so it can be sent again.
+			setMessages(answered);
+			setInput(text);
 		} finally {
 			setIsLoading(false);
 		}
@@ -100,7 +105,7 @@ export function ChatWidget() {
 						{messages.length === 0 && (
 							<div className="text-center text-gray-400 mt-10 px-4">
 								<p className="text-sm">Спросите о методике индекса или доступности территорий Северного Кавказа.</p>
-								<p className="text-sm mt-2">Спросите, например: "Где в Дагестане лучше всего с больницами?"</p>
+								<p className="text-sm mt-2">Спросите, например: «Где в Дагестане лучше всего с больницами?»</p>
 							</div>
 						)}
 

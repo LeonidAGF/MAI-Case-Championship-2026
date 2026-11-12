@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# raw OSM extracts downloaded by scripts/20_fetch_osm_poi.py (inputs, not committed)
+data/raw/

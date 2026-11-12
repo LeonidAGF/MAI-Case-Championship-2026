@@ -49,6 +49,8 @@ class Settings(BaseSettings):
 
     # --- ETL ---------------------------------------------------------------
     data_dir: Path = REPO_DIR / "data"
+    # Real OSM objects and features computed by the ML part (scripts/20-21): osm_poi.csv, osm_features.csv.
+    osm_data_dir: Path = REPO_DIR / "geo-embeddings" / "data"
     seeds_dir: Path = BACKEND_DIR / "seeds"
 
     # --- profile contract (section 9.2) ------------------------------------

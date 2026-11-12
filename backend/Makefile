@@ -2,7 +2,7 @@
 COMPOSE = docker compose
 RUN_API = $(COMPOSE) run --rm api
 
-.PHONY: up down logs seed seed-demo migrate test test-unit openapi coverage
+.PHONY: up down logs seed seed-osm migrate test test-unit openapi coverage
 
 up:            ## db + redis + api (migrations run on start)
 	$(COMPOSE) up -d --build
@@ -16,11 +16,11 @@ logs:
 migrate:
 	$(RUN_API) alembic upgrade head
 
-seed:          ## reference tables + territories from ../data (idempotent)
+seed:          ## reference tables + territories + OSM objects and features from ../data (idempotent)
 	$(RUN_API) python -m app.cli seed
 
-seed-demo:     ## DEV ONLY: synthetic features for frontend integration
-	$(RUN_API) python -m app.cli seed-demo-features
+seed-osm:      ## only the OSM objects and features (data/osm_poi.csv, data/osm_features.csv)
+	$(RUN_API) python -m app.cli seed-osm
 
 coverage:
 	$(RUN_API) python -m app.cli coverage

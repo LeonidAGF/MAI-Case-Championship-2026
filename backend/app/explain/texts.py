@@ -37,7 +37,9 @@ def fmt_num(x: float, digits: int = 1, signed: bool = False) -> str:
 
 
 def fmt_minutes(x: float) -> str:
-    m = max(0, int(round(x)))
+    if x < 0.5:  # the object is in the settlement itself (same road-graph node)
+        return "меньше минуты"
+    m = int(round(x))
     return f"{m} {plural(m, MINUTES)}"
 
 
@@ -114,10 +116,18 @@ def fact_text(
     imputed: bool = False,
     inherited_from: str | None = None,
     typical: str | None = None,
+    excluded: bool = False,
 ) -> str:
-    """One readable phrase; notes (data level, typical value) share a single parenthesis."""
+    """One readable phrase; notes (data level, typical value) share a single parenthesis.
+
+    ``excluded``: the feature has no data in the whole cluster, so it is left out of the index
+    (no estimate is used for it); ``imputed``: this territory's value is replaced by the median.
+    """
     spec = SPECS.get(code)
     subject = (spec.subject if spec and spec.subject else None) or name
+    if excluded:
+        text = f"{subject}: нет данных — признак не участвует в расчёте"
+        return text[0].upper() + text[1:]
     if value is None or imputed:
         text = f"{subject}: нет данных — принята типичная для кластера оценка"
         return text[0].upper() + text[1:]

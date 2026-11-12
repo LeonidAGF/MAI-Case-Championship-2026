@@ -89,10 +89,36 @@ async def cmd_load_territories(args: argparse.Namespace) -> Any:
     return await _in_transaction("territories", str(data_dir), run)
 
 
+# Real data committed by the ML part (scripts/20_fetch_osm_poi.py, 21_calculate_osm_features.py):
+# OpenStreetMap is queried once by those scripts, never by the backend.
+OSM_POI_FILE = "osm_poi.csv"
+OSM_FEATURES_FILE = "osm_features.csv"
+
+
+async def cmd_seed_osm(args: argparse.Namespace) -> Any:
+    """OSM objects (poi) and the features computed from them; any synthetic values are removed first."""
+    from app.etl.demo import clear_demo_features
+    from app.etl.features import load_features
+    from app.etl.poi import load_poi
+
+    data_dir = Path(args.osm_dir) if getattr(args, "osm_dir", None) else get_settings().osm_data_dir
+    poi, features = data_dir / OSM_POI_FILE, data_dir / OSM_FEATURES_FILE
+    out: dict[str, Any] = {"synthetic_removed": await _in_transaction("demo-features-clear", "synthetic", clear_demo_features)}
+    if poi.exists():
+        out["poi"] = await _in_transaction("poi", str(poi), lambda s: load_poi(s, poi, source="osm", replace=True))
+    if features.exists():
+        out["features"] = await _in_transaction(
+            "features", str(features), lambda s: load_features(s, features, source="osm+ml-graph", replace=True)
+        )
+    if "poi" not in out or "features" not in out:
+        out["warning"] = (f"{OSM_POI_FILE} / {OSM_FEATURES_FILE} not found in {data_dir}: run "
+                          "scripts/20_fetch_osm_poi.py and scripts/21_calculate_osm_features.py")
+    return out
+
+
 async def cmd_seed(args: argparse.Namespace) -> Any:
     out = {"reference": await cmd_seed_reference(args), "territories": await cmd_load_territories(args)}
-    if args.demo_features:
-        out["demo_features"] = await cmd_demo(args)
+    out["osm"] = await cmd_seed_osm(args)
     out["knowledge"] = await cmd_seed_knowledge(args)
     return out
 
@@ -113,13 +139,6 @@ async def cmd_seed_knowledge(_: argparse.Namespace) -> Any:
             embedder=embedder, file="active model configuration",
         ),
     )
-
-
-async def cmd_demo(_: argparse.Namespace) -> Any:
-    from app.etl.demo import seed_demo_features
-
-    sys.stderr.write("WARNING: loading SYNTHETIC demo features (source='synthetic-demo'). Not real data!\n")
-    return await _in_transaction("demo-features", "synthetic", seed_demo_features)
 
 
 async def cmd_clear_demo(_: argparse.Namespace) -> Any:
@@ -202,9 +221,9 @@ def cmd_export_openapi(args: argparse.Namespace) -> Any:
 
 
 async def cmd_chat_check(_: argparse.Namespace) -> Any:
-    from app.chat import gigachat
+    from app.chat import llm
 
-    return await gigachat.check(get_settings())
+    return await llm.check(get_settings())
 
 
 async def cmd_chat_eval(args: argparse.Namespace) -> Any:
@@ -254,14 +273,15 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("--revision", default="head")
     m.add_argument("--downgrade", action="store_true")
 
-    s = sub.add_parser("seed", help="reference tables + territories (idempotent, 'make seed')")
+    s = sub.add_parser("seed", help="reference tables + territories + OSM objects and features (idempotent, 'make seed')")
     s.add_argument("--data-dir")
-    s.add_argument("--demo-features", action="store_true", help="also load SYNTHETIC demo features (dev only)")
+    s.add_argument("--osm-dir", help="folder with osm_poi.csv / osm_features.csv (default OSM_DATA_DIR)")
     sub.add_parser("seed-reference", help="subindices, clusters, features, presets, scenarios from the model YAML")
     lt = sub.add_parser("load-territories", help="regions, municipalities (PostGIS), settlements, clusters")
     lt.add_argument("--data-dir")
-    sub.add_parser("seed-demo-features", help="DEV ONLY synthetic feature values")
-    sub.add_parser("clear-demo-features", help="remove synthetic feature values")
+    so = sub.add_parser("seed-osm", help="OSM objects + features (osm_poi.csv / osm_features.csv in OSM_DATA_DIR), synthetic removed")
+    so.add_argument("--osm-dir", help="folder with osm_poi.csv / osm_features.csv (default OSM_DATA_DIR)")
+    sub.add_parser("clear-demo-features", help="remove synthetic feature values left by older versions")
 
     f = sub.add_parser("load-features", help="ML feature export (long/wide, parquet/CSV)")
     f.add_argument("file")
@@ -307,7 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("coverage", help="data completeness report (JSON)")
     oa = sub.add_parser("export-openapi", help="write the OpenAPI contract for the frontend")
     oa.add_argument("--out", default=str(BACKEND_DIR / "openapi.json"))
-    sub.add_parser("chat-check", help="chat LLM: key, TLS certificates, model availability (free calls only)")
+    sub.add_parser("chat-check", help="chat LLM (Anthropic): key, network, model availability (free call only)")
     ce = sub.add_parser("chat-eval", help="10 control questions: grounding check (calls the LLM API)")
     ce.add_argument("--questions", default=str(BACKEND_DIR / "app" / "chat" / "control_questions.yaml"))
     ce.add_argument("--yes", action="store_true")
@@ -318,7 +338,7 @@ ASYNC_COMMANDS = {
     "seed": cmd_seed,
     "seed-reference": cmd_seed_reference,
     "load-territories": cmd_load_territories,
-    "seed-demo-features": cmd_demo,
+    "seed-osm": cmd_seed_osm,
     "clear-demo-features": cmd_clear_demo,
     "load-features": cmd_load_features,
     "load-poi": cmd_load_poi,

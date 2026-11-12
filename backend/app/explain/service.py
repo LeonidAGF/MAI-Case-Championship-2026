@@ -73,6 +73,7 @@ def explain_territory(
             mode=mode,
             imputed=comp.imputed,
             inherited_from=p.inherited_from if p else None,
+            excluded=comp.normalized is None,
         )
         text = fact_text(comp.feature_code, comp.raw_value, **fact_kwargs)
         text_with_typical = fact_text(comp.feature_code, comp.raw_value, typical=typical, **fact_kwargs)

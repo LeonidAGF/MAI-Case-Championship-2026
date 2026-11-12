@@ -1,0 +1,29 @@
+{
+  "created_utc": "2026-11-12T15:50:21+00:00",
+  "source": "https://download.geofabrik.de/russia/north-caucasus-fed-district-latest.osm.pbf",
+  "osm_base": "2026-11-11T21:22:47Z",
+  "objects": 15372,
+  "by_category": {
+    "airport": 7,
+    "ambulance": 23,
+    "bus_station": 145,
+    "cafe": 4160,
+    "cinema": 87,
+    "clinic": 762,
+    "college": 200,
+    "community_centre": 600,
+    "hospital": 1052,
+    "kindergarten": 1191,
+    "mall": 506,
+    "marketplace": 236,
+    "park": 920,
+    "railway_station": 281,
+    "school": 2474,
+    "sports": 2554,
+    "university": 174
+  },
+  "parks_with_area": 905,
+  "park_area_ha_total": 3509.6,
+  "elapsed_s": 10.5,
+  "license": "(c) OpenStreetMap contributors, ODbL 1.0"
+}
