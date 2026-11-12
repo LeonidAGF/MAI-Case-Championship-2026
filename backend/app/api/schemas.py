@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -375,3 +376,173 @@ class HealthResponse(BaseModel):
     scoring_engine: str
     checks: dict[str, str]
     data_revision: int | None
+
+
+# --- ambulance travel time (/ambulance) ------------------------------------------------------
+
+NormStatus = Literal["met", "borderline", "not_met"]
+
+
+class AmbulanceEstimate(BaseModel):
+    minutes: float = Field(description="Оценка времени доезда, мин: время в пути (+ приём вызова, если задан)")
+    minutes_low: float = Field(description="Нижняя граница диапазона погрешности, мин")
+    minutes_high: float = Field(description="Верхняя граница диапазона погрешности, мин")
+    travel_minutes: float = Field(description="Только время в пути от базы, мин")
+    dispatch_minutes: float = Field(description="Приём вызова и выезд бригады, добавленные к пути, мин")
+    norm_minutes: float
+    norm_status: NormStatus = Field(
+        description="met — даже верхняя граница в нормативе; not_met — даже нижняя дольше; borderline — норматив внутри диапазона"
+    )
+
+
+class AmbulanceBase(BaseModel):
+    external_id: str
+    name: str | None
+    category: str = Field(description="ambulance — станция скорой помощи, hospital — больница")
+    category_label: str
+    location: Point
+    access_m: int = Field(description="От объекта до ближайшей дороги графа, м")
+
+
+class AmbulanceRoute(BaseModel):
+    distance_km: float | None = Field(description="Длина маршрута по дорогам, км")
+    flat_minutes: float | None = Field(description="Тот же маршрут без поправок на уклон и высоту, мин")
+    terrain_minutes: float | None = Field(description="Сколько добавляют уклон и высота, мин")
+    climb_m: int | None
+    descent_m: int | None
+    max_height_m: int | None = Field(description="Высшая точка маршрута над уровнем моря, м (SRTM)")
+    steep_km: float | None = Field(description="Участки с уклоном от порога крутизны, км")
+    urban_km: float = Field(description="Участки в населённых пунктах (скорость как в населённом пункте), км")
+    osm_speed_km: float = Field(description="Участки со скоростью из тега maxspeed OpenStreetMap, км")
+    no_terrain_km: float = Field(description="Участки без данных рельефа, км")
+    access_m: int = Field(description="От населённого пункта до ближайшей дороги графа, м")
+
+
+class AmbulanceSettlement(BaseModel):
+    territory_id: int
+    name: str
+    region_code: str | None
+    region_name: str | None
+    municipality_id: int | None
+    municipality_name: str | None
+    cluster: str | None
+    population: int | None
+    location: Point | None
+    elevation_m: float | None = Field(description="Высота населённого пункта над уровнем моря, м (SRTM)")
+    available: bool
+    estimate: AmbulanceEstimate | None
+    base: AmbulanceBase | None
+    route: AmbulanceRoute | None
+    reason: str | None = Field(description="Почему нет оценки: far_from_roads — далеко от дорог, по которым можно доехать")
+    flags: list[str] = Field(description="hospital_base, far_from_roads, no_terrain, stale")
+    text: str
+    notes: list[str]
+    model_version: str
+    computed_at: dt.datetime | None
+    stale: bool = Field(description="Параметры модели изменились после расчёта: нужен load-ambulance")
+
+
+class AmbulanceListItem(BaseModel):
+    territory_id: int
+    name: str
+    region_code: str | None
+    municipality_id: int | None
+    municipality_name: str | None
+    cluster: str | None
+    population: int | None
+    location: Point | None
+    elevation_m: float | None
+    minutes: float | None
+    minutes_low: float | None
+    minutes_high: float | None
+    norm_status: NormStatus | None
+    distance_km: float | None
+    terrain_minutes: float | None
+    base_name: str | None
+    base_category: str | None
+
+
+class AmbulanceList(Page):
+    items: list[AmbulanceListItem]
+    norm_minutes: float
+    computed_at: dt.datetime | None
+    stale: bool
+
+
+class AmbulanceReach(BaseModel):
+    minutes: float
+    settlements: int = Field(description="Населённых пунктов, куда скорая доезжает за это время")
+    share: float | None = Field(description="Их доля среди пунктов с оценкой")
+    population: int = Field(description="Жители этих пунктов (только пункты с известным населением)")
+    population_share: float | None = Field(description="Доля жителей среди пунктов с известным населением")
+
+
+class AmbulanceStats(BaseModel):
+    settlements: int
+    estimated: int
+    without_estimate: int
+    median_minutes: float | None
+    p90_minutes: float | None
+    max_minutes: float | None
+    within_norm: AmbulanceReach
+    thresholds: list[AmbulanceReach]
+    norm_status: dict[str, int]
+    population_settlements: int = Field(description="Пункты с оценкой и известным населением")
+    population_known: int = Field(description="Их население")
+    hospital_base_share: float | None = Field(description="Доля пунктов, где ближайшая база — больница")
+
+
+class AmbulanceGroup(BaseModel):
+    territory_id: int | None
+    code: str | None
+    name: str
+    level: Literal["region", "municipality"]
+    stats: AmbulanceStats
+
+
+class AmbulanceScope(BaseModel):
+    territory_id: int | None
+    name: str
+    level: Literal["federal_district", "region", "municipality"]
+
+
+class AmbulanceSummary(BaseModel):
+    scope: AmbulanceScope
+    norm_minutes: float
+    dispatch_minutes: float
+    stats: AmbulanceStats
+    groups: list[AmbulanceGroup]
+    slowest: list[AmbulanceListItem]
+    text: str
+    model_version: str
+    computed_at: dt.datetime | None
+    stale: bool
+
+
+class AmbulanceSpeed(BaseModel):
+    highway: str
+    label: str
+    urban_kmh: float
+    rural_kmh: float
+
+
+class AmbulanceMethod(BaseModel):
+    model_version: str
+    computed_at: dt.datetime | None
+    run_id: int | None
+    stale: bool
+    norm_minutes: float
+    thresholds: list[float]
+    dispatch_minutes: float
+    uncertainty: dict[str, float]
+    speeds: list[AmbulanceSpeed]
+    default_kmh: float
+    maxspeed_tags: dict[str, float]
+    urban: dict[str, Any]
+    slope: dict[str, Any]
+    height: dict[str, Any]
+    access: dict[str, float]
+    base_categories: list[str]
+    sources: list[str]
+    run: dict[str, Any] = Field(description="Статистика последнего расчёта: граф, базы, скорости, рельеф")
+    description: list[str]

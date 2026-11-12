@@ -352,6 +352,28 @@ class TravelTime(Base):
     )
 
 
+class AmbulanceTime(Base):
+    """Ambulance travel time to a settlement (app/ambulance, `python -m app.cli load-ambulance`).
+
+    One row per scored settlement from the last run. ``minutes`` = from the base that reaches the
+    settlement first, access legs included, call handling not; NULL when no base can reach it by
+    road (``details.reason``). ``details``: the base, route statistics, parts of the time.
+    """
+
+    __tablename__ = "ambulance_time"
+
+    territory_id: Mapped[int] = mapped_column(
+        ForeignKey("territory.id", ondelete="CASCADE"), primary_key=True
+    )
+    minutes: Mapped[float | None] = mapped_column(Float)
+    # The same route without the height and slope slowdown.
+    flat_minutes: Mapped[float | None] = mapped_column(Float)
+    distance_km: Mapped[float | None] = mapped_column(Float)
+    elevation_m: Mapped[float | None] = mapped_column(Float)
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    etl_run_id: Mapped[int | None] = mapped_column(ForeignKey("etl_run.id", ondelete="SET NULL"))
+
+
 class KnowledgeChunk(Base):
     __tablename__ = "knowledge_chunk"
 
