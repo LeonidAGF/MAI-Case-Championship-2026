@@ -19,7 +19,6 @@ const AIRPORTS = [
 
 export function WhatIfPanel() {
 	const profile = useAtlas((s) => s.profile);
-	// const selectedTerritoryId = useAtlas((s) => s.selectedTerritoryId);
 
 	const [scenarios, setScenarios] = useState<ScenarioInfo[]>([]);
 	const [selectedCode, setSelectedCode] = useState('W1');
@@ -101,10 +100,8 @@ export function WhatIfPanel() {
 
 	return (
 		<div className="space-y-6">
-			{/* Панель управления */}
-			<div className="bg-gray-50 p-4 rounded-xl border space-y-4">
+			<div className="bg-gray-50 p-3 md:p-4 rounded-xl border space-y-4">
 				
-				{/* Выбор сценария */}
 				<div>
 					<label className="block text-xs font-medium text-gray-500 mb-1">Сценарий</label>
 					<select 
@@ -117,10 +114,8 @@ export function WhatIfPanel() {
 					{activeScenario && <p className="text-xs text-gray-500 mt-1">{activeScenario.description}</p>}
 				</div>
 
-				{/* Форма параметров */}
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
 				
-					{/* ВЫБОР РАЙОНА */}
 					{activeScenario?.target === 'municipality' && (
 						<div className="md:col-span-2">
 							<label className="block text-xs font-medium text-gray-500 mb-1">Район / Муниципалитет</label>
@@ -135,10 +130,8 @@ export function WhatIfPanel() {
 						</div>
 					)}
 
-					{/* ВЫБОР ТОЧКИ (Поиск или координаты) */}
 					{activeScenario?.target === 'point' && (
 						<>
-							{/* Для W8 - выбор аэропорта */}
 							{selectedCode === 'W8' ? (
 								<div className="md:col-span-2">
 									<label className="block text-xs font-medium text-gray-500 mb-1">Аэропорт</label>
@@ -184,7 +177,6 @@ export function WhatIfPanel() {
 								</div>
 							)}
 
-							{/* Координаты */}
 							<div>
 								<label className="block text-xs font-medium text-gray-500 mb-1">Lat</label>
 								<input type="number" step="0.001" value={params.lat || ''} onChange={(e) => updateParam('lat', Number(e.target.value))} className="w-full border rounded-lg px-3 py-2 text-sm" />
@@ -196,7 +188,6 @@ export function WhatIfPanel() {
 						</>
 					)}
 
-					{/* KIND (Тип объекта) */}
 					{activeScenario?.kinds && activeScenario.kinds.length > 0 && (
 						<div>
 							<label className="block text-xs font-medium text-gray-500 mb-1">Тип объекта</label>
@@ -210,7 +201,6 @@ export function WhatIfPanel() {
 						</div>
 					)}
 
-					{/* ЧИСЛОВЫЕ ПАРАМЕТРЫ (из params_schema) */}
 					{activeScenario?.params_schema?.properties && Object.entries(activeScenario.params_schema.properties).map(([key, schema]: [string, any]) => {
 						if (['lat', 'lon', 'kind', 'municipality_id', 'territory_ids'].includes(key)) return null;
 						if (key === 'park_area_ha' && params.kind !== 'park') return null;
@@ -237,7 +227,6 @@ export function WhatIfPanel() {
 				</button>
 			</div>
 
-			{/* Блок ошибки с деталями */}
 			{error && (
 				<div className="bg-red-50 text-red-700 p-4 rounded-xl text-sm border border-red-100">
 					<b className="block mb-1">{error.message}</b>
@@ -251,14 +240,12 @@ export function WhatIfPanel() {
 				</div>
 			)}
 
-			{/* Warnings */}
 			{result?.warnings && result.warnings.length > 0 && (
 				<div className="bg-yellow-50 text-yellow-800 p-4 rounded-xl text-sm border border-yellow-200">
-					{result.warnings.map((w, i) => <div key={i}>⚠️ {w}</div>)}
+					{result.warnings.map((w, i) => <div key={i}>{w}</div>)}
 				</div>
 			)}
 
-			{/* План для W10 */}
 			{result?.plan && (
 				<div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
 					<h3 className="font-bold text-indigo-900 mb-2">План пакетного улучшения</h3>
@@ -273,7 +260,6 @@ export function WhatIfPanel() {
 				</div>
 			)}
 
-			{/* Результаты */}
 			{result && (
 				<div className="space-y-6">
 					<div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
@@ -285,33 +271,34 @@ export function WhatIfPanel() {
 						</div>
 					</div>
 
-					<div className="bg-white border rounded-xl overflow-hidden shadow-sm">
-						<table className="w-full text-sm text-left">
-							<thead className="bg-gray-50 border-b">
-								<tr>
-									<th className="px-4 py-3 font-medium text-gray-600">Территория</th>
-									<th className="px-4 py-3 font-medium text-gray-600 text-center">Было</th>
-									<th className="px-4 py-3 font-medium text-gray-600 text-center">Стало</th>
-									<th className="px-4 py-3 font-medium text-gray-600 text-center">Дельта</th>
-								</tr>
-							</thead>
-							<tbody className="divide-y">
-								{/* Ограничиваем топ-50 по модулю дельты */}
-								{result.results
-									.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-									.slice(0, 50)
-									.map((r) => (
-										<tr key={r.territory_id} className="hover:bg-gray-50">
-											<td className="px-4 py-3 font-medium">{r.name}</td>
-											<td className="px-4 py-3 text-center text-gray-500">{r.total_before.toFixed(1)}</td>
-											<td className="px-4 py-3 text-center font-medium">{r.total_after.toFixed(1)}</td>
-											<td className={`px-4 py-3 text-center font-bold ${r.delta > 0 ? 'text-green-600' : r.delta < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-												{r.delta > 0 ? '+' : ''}{r.delta.toFixed(1)}
-											</td>
-										</tr>
-								))}
-							</tbody>
-						</table>
+					<div className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col">
+						<div className="overflow-x-auto">
+							<table className="w-full text-sm text-left whitespace-nowrap min-w-[500px]">
+								<thead className="bg-gray-50 border-b">
+									<tr>
+										<th className="px-3 md:px-4 py-3 font-medium text-gray-600">Территория</th>
+										<th className="px-3 md:px-4 py-3 font-medium text-gray-600 text-center">Было</th>
+										<th className="px-3 md:px-4 py-3 font-medium text-gray-600 text-center">Стало</th>
+										<th className="px-3 md:px-4 py-3 font-medium text-gray-600 text-center">Дельта</th>
+									</tr>
+								</thead>
+								<tbody className="divide-y">
+									{result.results
+										.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+										.slice(0, 50)
+										.map((r) => (
+											<tr key={r.territory_id} className="hover:bg-gray-50">
+												<td className="px-3 md:px-4 py-3 font-medium">{r.name}</td>
+												<td className="px-3 md:px-4 py-3 text-center text-gray-500">{r.total_before.toFixed(1)}</td>
+												<td className="px-3 md:px-4 py-3 text-center font-medium">{r.total_after.toFixed(1)}</td>
+												<td className={`px-3 md:px-4 py-3 text-center font-bold ${r.delta > 0 ? 'text-green-600' : r.delta < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+													{r.delta > 0 ? '+' : ''}{r.delta.toFixed(1)}
+												</td>
+											</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
 						{result.results.length > 50 && (
 							<div className="p-3 text-center text-xs text-gray-500 border-t bg-gray-50">
 								Показаны топ-50 из {result.results.length}

@@ -2,22 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAtlas } from '@/lib/store';
-import { API, streamChat } from '@/lib/api';
-
-function citationHref(url: string | null): string | null {
-	if (!url) return null;
-	try {
-		const target = new URL(url, API);
-		return target.protocol === 'http:' || target.protocol === 'https:' ? target.toString() : null;
-	} catch {
-		return null;
-	}
-}
+import { streamChat } from '@/lib/api';
 
 interface Message {
 	role: 'user' | 'assistant';
 	content: string;
-	sources?: { title: string; url: string | null }[];
 }
 
 export function ChatWidget() {
@@ -29,6 +18,11 @@ export function ChatWidget() {
 	const [error, setError] = useState<string | null>(null);
 	
 	const scrollRef = useRef<HTMLDivElement>(null);
+	const messagesRef = useRef<Message[]>([]);
+
+	useEffect(() => {
+		messagesRef.current = messages;
+	}, [messages]);
 
 	useEffect(() => {
 		if (scrollRef.current) {
@@ -40,31 +34,25 @@ export function ChatWidget() {
 		if (!input.trim() || isLoading) return;
 
 		const userMsg: Message = { role: 'user', content: input.trim() };
-		const newMessages = [...messages, userMsg];
-		setMessages(newMessages);
+		const historyToSend = [...messagesRef.current, userMsg]; 
+		
+		setMessages([...historyToSend, { role: 'assistant', content: '' }]);
 		setInput('');
 		setIsLoading(true);
 		setError(null);
 
-		setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
-
 		try {
 			let assistantText = '';
-			await streamChat(newMessages, profile, (chunk) => {
+			await streamChat(historyToSend, profile, (chunk) => {
 				assistantText += chunk;
 				setMessages((prev) => {
 					const newArr = [...prev];
-					newArr[newArr.length - 1] = { ...newArr[newArr.length - 1], content: assistantText };
-					return newArr;
-				});
-			}, (sources) => {
-				setMessages((prev) => {
-					const newArr = [...prev];
-					newArr[newArr.length - 1] = { ...newArr[newArr.length - 1], sources };
+					newArr[newArr.length - 1] = { role: 'assistant', content: assistantText };
 					return newArr;
 				});
 			});
 		} catch (e: unknown) {
+			console.error(e);
 			setError(e instanceof Error ? e.message : 'Произошла ошибка при обращении к ИИ');
 			setMessages((prev) => prev.slice(0, -1));
 		} finally {
@@ -89,78 +77,72 @@ export function ChatWidget() {
 			</button>
 
 			{isOpen && (
-				<div className="fixed bottom-6 right-6 w-96 h-[600px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col z-50 overflow-hidden">
+				<div className="fixed z-50 bg-white shadow-2xl border border-gray-200 flex flex-col overflow-hidden transition-all
+					/* Мобилка: почти на весь экран */
+					bottom-0 right-0 w-full h-[85vh] rounded-t-2xl
+					/* ПК: в углу */
+					md:bottom-6 md:right-6 md:w-96 md:h-[600px] md:rounded-2xl"
+				>
 				
-				<div className="bg-blue-600 text-white p-4 flex justify-between items-center shrink-0">
-					<div>
-						<h3 className="font-bold">Атлас ИИ</h3>
-						<p className="text-xs text-blue-100">Спросите о любом месте СКФО</p>
-					</div>
-					<button onClick={() => setIsOpen(false)} className="text-blue-100 hover:text-white p-1">
-						<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-						</svg>
-					</button>
-				</div>
-
-				<div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-					{messages.length === 0 && (
-						<div className="text-center text-gray-400 mt-10">
-							<p className="text-4xl mb-2">👋</p>
-							<p className="text-sm">Спросите о методике индекса или доступности территорий Северного Кавказа.</p>
-							<p className="text-sm">Спросите, например: "Где в Дагестане лучше всего с детскими садами?"</p>
+					<div className="bg-blue-600 text-white p-4 flex justify-between items-center shrink-0">
+						<div>
+							<h3 className="font-bold">Атлас ИИ</h3>
+							<p className="text-xs text-blue-100">Спросите о любом месте СКФО</p>
 						</div>
-					)}
-
-					{messages.map((m, i) => (
-						<div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-							<div className={`max-w-[85%] p-3 rounded-2xl text-sm ${
-							m.role === 'user' 
-								? 'bg-blue-600 text-white rounded-br-none' 
-								: 'bg-white border text-gray-800 rounded-bl-none shadow-sm'
-							}`}>
-								{m.content || (m.role === 'assistant' && isLoading && <span className="animate-pulse">Проверяю данные...</span>)}
-								{m.sources && m.sources.length > 0 && (
-									<div className="mt-3 border-t pt-2 text-xs">
-										<div className="font-medium text-gray-500 mb-1">Источники</div>
-										{m.sources.map((source, index) => {
-											const href = citationHref(source.url);
-											return href ? <a key={index} href={href} target="_blank" rel="noopener noreferrer" className="block text-blue-600 underline mb-1">{source.title}</a> : <div key={index} className="text-gray-600">{source.title}</div>;
-										})}
-									</div>
-								)}
-							</div>
-						</div>
-					))}
-					
-					{error && (
-						<div className="text-center text-xs text-red-500 bg-red-50 p-2 rounded">
-							{error}
-						</div>
-					)}
-				</div>
-
-				<div className="p-3 bg-white border-t shrink-0">
-					<div className="flex gap-2">
-						<textarea
-							value={input}
-							onChange={(e) => setInput(e.target.value)}
-							onKeyDown={handleKeyDown}
-							placeholder="Задайте вопрос..."
-							className="flex-1 border rounded-xl px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none max-h-24"
-							rows={1}
-							disabled={isLoading}
-						/>
-						<button
-							onClick={handleSend}
-							disabled={!input.trim() || isLoading}
-							className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center w-10 h-10 shrink-0"
-						>
-							<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+						<button onClick={() => setIsOpen(false)} className="text-blue-100 hover:text-white p-1">
+							<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+							</svg>
 						</button>
 					</div>
-				</div>
 
+					<div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+						{messages.length === 0 && (
+							<div className="text-center text-gray-400 mt-10 px-4">
+								<p className="text-sm">Спросите о методике индекса или доступности территорий Северного Кавказа.</p>
+								<p className="text-sm mt-2">Спросите, например: "Где в Дагестане лучше всего с детскими садами?"</p>
+							</div>
+						)}
+
+						{messages.map((m, i) => (
+							<div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+								<div className={`max-w-[85%] p-3 rounded-2xl text-sm ${
+								m.role === 'user' 
+									? 'bg-blue-600 text-white rounded-br-none' 
+									: 'bg-white border text-gray-800 rounded-bl-none shadow-sm'
+								}`}>
+									{m.content || (m.role === 'assistant' && isLoading && <span className="animate-pulse text-gray-400">Проверяю данные...</span>)}
+								</div>
+							</div>
+						))}
+						
+						{error && (
+							<div className="text-center text-xs text-red-500 bg-red-50 p-2 rounded">
+								{error}
+							</div>
+						)}
+					</div>
+
+					<div className="p-3 bg-white border-t shrink-0">
+						<div className="flex gap-2">
+							<textarea
+								value={input}
+								onChange={(e) => setInput(e.target.value)}
+								onKeyDown={handleKeyDown}
+								placeholder="Задайте вопрос..."
+								className="flex-1 border rounded-xl px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none max-h-24"
+								rows={1}
+								disabled={isLoading}
+							/>
+							<button
+								onClick={handleSend}
+								disabled={!input.trim() || isLoading}
+								className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center w-10 h-10 shrink-0"
+							>
+								<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+							</button>
+						</div>
+					</div>
 				</div>
 			)}
 		</>

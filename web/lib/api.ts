@@ -264,8 +264,7 @@ export async function fetchTerritories(params: { level?: string; q?: string; lim
 export async function streamChat(
 	messages: { role: 'user' | 'assistant'; content: string }[],
 	profile: Profile,
-	onChunk: (text: string) => void,
-	onCitations: (sources: { title: string; url: string | null }[]) => void
+	onChunk: (text: string) => void
 ) {
 	const res = await fetch(`${API}/chat`, {
 		method: 'POST',
@@ -288,7 +287,6 @@ export async function streamChat(
 		if (!event || !payload) return;
 		const data = JSON.parse(payload);
 		if (event === 'delta') onChunk(data.text);
-		if (event === 'citations') onCitations(data.sources ?? []);
 		if (event === 'error') throw new Error(data.message || 'Ошибка ассистента');
 	};
 
