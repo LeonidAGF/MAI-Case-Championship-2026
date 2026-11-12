@@ -1,4 +1,5 @@
-"""Cache with graceful degradation: Redis when available, in-process memory otherwise.
+"""
+Cache with graceful degradation: Redis when available, in-process memory otherwise.
 
 Redis outages never fail a request: after an error Redis is skipped for a cool-down
 period and the in-memory fallback is used (per process).

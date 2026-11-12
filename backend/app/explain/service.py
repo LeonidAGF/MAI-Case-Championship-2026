@@ -1,4 +1,5 @@
-"""Explanations from components: waterfall vs the cluster's typical territory + top-3 pros/cons.
+"""
+Explanations from components: waterfall vs the cluster's typical territory + top-3 pros/cons.
 
 Waterfall: baseline = Σ_f median contribution of the cluster ("типичная территория
 кластера"); each step = contribution_f − median contribution_f; baseline + Σ steps = total.

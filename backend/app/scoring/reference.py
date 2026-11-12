@@ -1,4 +1,5 @@
-"""Reference implementation of the published formula (report 4.3 + 5.3 a/b).
+"""
+Reference implementation of the published formula (report 4.3 + 5.3 a/b).
 
     index(t, p) = 100 * Σ_s w_s(p) * Σ_f w_f * norm_f(cluster(t), f)
 

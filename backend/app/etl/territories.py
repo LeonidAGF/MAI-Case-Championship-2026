@@ -1,4 +1,5 @@
-"""Territory registry from ML outputs (BE1 stage 1: geometries into PostGIS + clusters).
+"""
+Territory registry from ML outputs (BE1 stage 1: geometries into PostGIS + clusters).
 
 Inputs (read-only, produced by the ML pipeline in ``DATA_DIR``):
   municipalities.parquet       144 municipal districts/okrugs, WKB polygons (EPSG:4326)

@@ -1,4 +1,5 @@
-"""ORM models. Schema = section 7 of the team report + supporting tables.
+"""
+ORM models. Schema = section 7 of the team report + supporting tables.
 
 Section 7 tables: territory, cluster, feature, feature_value, profile, index_result,
 component, scenario, scenario_run, knowledge_chunk.

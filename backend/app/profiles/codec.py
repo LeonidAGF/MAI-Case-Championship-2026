@@ -1,4 +1,5 @@
-"""URL parameter ``p`` codec (section 3.2): JSON -> [deflate-raw] -> base64url.
+"""
+URL parameter ``p`` codec (section 3.2): JSON -> [deflate-raw] -> base64url.
 
 Accepted on input (auto-detected, in this order):
   * raw JSON (``p={"v":1,...}``, URL-encoded by the client);

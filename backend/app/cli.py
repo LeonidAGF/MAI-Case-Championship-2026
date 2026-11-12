@@ -1,4 +1,5 @@
-"""Command line: migrations, seeding, ETL loaders, reports, OpenAPI export, chat eval.
+"""
+Command line: migrations, seeding, ETL loaders, reports, OpenAPI export, chat eval.
 
     python -m app.cli migrate
     python -m app.cli seed [--demo-features]

@@ -1,4 +1,5 @@
-"""What-if engine: scenario -> feature overrides -> standard scoring pipeline -> before/after.
+"""
+What-if engine: scenario -> feature overrides -> standard scoring pipeline -> before/after.
 
 Report section 7: "прогон сценария создаёт запись scenario_run, движок копирует затронутые
 feature_value с поправками (или пересчитывает времена через OSRM), затем по обычному

@@ -1,4 +1,5 @@
-"""Load feature values exported by ML (contract 9.3 "ETL → БД": feature_value(territory, code, raw_value, as_of)).
+"""
+Load feature values exported by ML (contract 9.3 "ETL → БД": feature_value(territory, code, raw_value, as_of)).
 
 Accepted layouts (parquet or CSV, auto-detected):
   long:  <territory key>, feature_code, raw_value [, mode, as_of, imputed]

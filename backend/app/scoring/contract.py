@@ -1,4 +1,5 @@
-"""Backend <-> ML contract for the index calculator ("Калькулятор → UI", section 9.3).
+"""
+Backend <-> ML contract for the index calculator ("Калькулятор → UI", section 9.3).
 
 ML implements ``IndexEngine`` in their own module and sets
 ``SCORING_ENGINE=their.module:TheirEngine``. The backend never changes because of it:

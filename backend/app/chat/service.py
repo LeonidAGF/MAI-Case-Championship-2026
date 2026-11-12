@@ -1,4 +1,5 @@
-"""Chat orchestrator (feature #2): GigaChat + three DB-backed functions, streamed to the client as SSE.
+"""
+Chat orchestrator (feature #2): GigaChat + three DB-backed functions, streamed to the client as SSE.
 
 * Model: GIGACHAT_MODEL (default GigaChat-3-Pro) through the GigaChat REST API with custom
   function calling (app.chat.gigachat).
