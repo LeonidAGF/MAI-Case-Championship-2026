@@ -1,0 +1,113 @@
+{
+  "num_nodes": 500,
+  "num_features": 20,
+  "num_message_edges": 5046,
+  "num_original_edges": 3925,
+  "feature_names": [
+    "log1p_school_5km",
+    "log1p_school_10km",
+    "log1p_school_20km",
+    "log1p_kindergarten_5km",
+    "log1p_kindergarten_10km",
+    "log1p_kindergarten_20km",
+    "log1p_hospital_5km",
+    "log1p_hospital_10km",
+    "log1p_hospital_20km",
+    "log1p_clinic_5km",
+    "log1p_clinic_10km",
+    "log1p_clinic_20km",
+    "log1p_nearest_school_km",
+    "missing_nearest_school_km",
+    "log1p_nearest_kindergarten_km",
+    "missing_nearest_kindergarten_km",
+    "log1p_nearest_hospital_km",
+    "missing_nearest_hospital_km",
+    "log1p_nearest_clinic_km",
+    "missing_nearest_clinic_km"
+  ],
+  "normalization": {
+    "log1p_school_5km": {
+      "mean": 0.15553737844396653,
+      "std": 0.37362329404862377
+    },
+    "log1p_school_10km": {
+      "mean": 0.36801136627948305,
+      "std": 0.6223709569771279
+    },
+    "log1p_school_20km": {
+      "mean": 0.9854279398963248,
+      "std": 1.013517830464003
+    },
+    "log1p_kindergarten_5km": {
+      "mean": 0.07238441616688056,
+      "std": 0.2361818341119278
+    },
+    "log1p_kindergarten_10km": {
+      "mean": 0.20743856128740928,
+      "std": 0.4326853318626102
+    },
+    "log1p_kindergarten_20km": {
+      "mean": 0.6631811976480406,
+      "std": 0.7524133303939037
+    },
+    "log1p_hospital_5km": {
+      "mean": 0.07671587189368041,
+      "std": 0.28839286067980696
+    },
+    "log1p_hospital_10km": {
+      "mean": 0.20931126927775215,
+      "std": 0.4733565134573588
+    },
+    "log1p_hospital_20km": {
+      "mean": 0.7425504768975454,
+      "std": 0.794080688452669
+    },
+    "log1p_clinic_5km": {
+      "mean": 0.04243871635390903,
+      "std": 0.2628752317906221
+    },
+    "log1p_clinic_10km": {
+      "mean": 0.13876199488069374,
+      "std": 0.5148724839598395
+    },
+    "log1p_clinic_20km": {
+      "mean": 0.517942238865227,
+      "std": 0.9772851741413249
+    },
+    "log1p_nearest_school_km": {
+      "mean": 2.6632938397834747,
+      "std": 0.9869534575486393
+    },
+    "missing_nearest_school_km": {
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "log1p_nearest_kindergarten_km": {
+      "mean": 2.833027743083074,
+      "std": 0.8073523050561493
+    },
+    "missing_nearest_kindergarten_km": {
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "log1p_nearest_hospital_km": {
+      "mean": 2.853347967016952,
+      "std": 0.7705061374365284
+    },
+    "missing_nearest_hospital_km": {
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "log1p_nearest_clinic_km": {
+      "mean": 3.4836952616797174,
+      "std": 0.8172894834701657
+    },
+    "missing_nearest_clinic_km": {
+      "mean": 0.0,
+      "std": 0.0
+    }
+  },
+  "distance_cap_km": 100.0,
+  "skipped_edges": 0,
+  "transport_index_included": false
+}
