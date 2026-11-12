@@ -54,6 +54,7 @@ class ScenarioInput(BaseModel):
 
 
 def tool_definitions(feature_lines: str) -> list[dict[str, Any]]:
+    """Anthropic tool definitions (name, description, input_schema); order is fixed for prompt caching."""
     return [
         {
             "name": "get_index",
@@ -61,10 +62,10 @@ def tool_definitions(feature_lines: str) -> list[dict[str, Any]]:
                 "Индекс доступности из базы «Атласа» под профиль пользователя. С параметром territory — "
                 "балл 0–100, место в кластере, субиндексы, сильные и слабые стороны одной территории. "
                 "Без territory — рейтинг территорий (по субъекту region и/или кластеру cluster); "
-                "рейтинг строится отдельно внутри каждого кластера. rank_by: total, S1..S6 или код "
-                "признака:\n" + feature_lines
+                "рейтинг строится отдельно внутри каждого кластера. Субиндекс со значением null — по нему "
+                "в базе нет данных. rank_by: total, S1..S6 или код признака:\n" + feature_lines
             ),
-            "parameters": {
+            "input_schema": {
                 "type": "object",
                 "properties": {
                     "territory": {"type": "string", "description": "Название населённого пункта или района, напр. «Ахты»"},
@@ -84,7 +85,7 @@ def tool_definitions(feature_lines: str) -> list[dict[str, Any]]:
                 "Сравнение 2–3 территорий одного кластера: баллы, субиндексы, лидеры по субиндексам, "
                 "плюсы и минусы. Для территорий из разных кластеров вернёт ошибку с объяснением."
             ),
-            "parameters": {
+            "input_schema": {
                 "type": "object",
                 "properties": {
                     "territories": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 3}
@@ -100,9 +101,10 @@ def tool_definitions(feature_lines: str) -> list[dict[str, Any]]:
                 "больницу, W3 — сад/школу, W4 — колледж, W5 — ЖД-станцию, W8 — расширить аэропорт, "
                 "W9 — парк/ТЦ/кинотеатр: territory = населённый пункт, где находится объект. "
                 "W6 — ремонт трассы (−X% времени), W7 — автобусный маршрут до райцентра, W10 — пакет "
-                "W1+W3+W7: territory = район или населённый пункт в нём. params — необязательные уточнения."
+                "W1+W3+W7: territory = район или населённый пункт в нём. params — необязательные уточнения. "
+                "Если для сценария в базе нет исходных данных, результат скажет об этом в warnings."
             ),
-            "parameters": {
+            "input_schema": {
                 "type": "object",
                 "properties": {
                     "scenario_code": {"type": "string", "enum": [f"W{i}" for i in range(1, 11)]},
@@ -133,28 +135,6 @@ def tool_definitions(feature_lines: str) -> list[dict[str, Any]]:
     ]
 
 
-# GigaChat picks functions and fills arguments noticeably better with examples.
-FEW_SHOT_EXAMPLES: dict[str, list[dict[str, Any]]] = {
-    "get_index": [
-        {"request": "Какой индекс доступности у Ахты?", "params": {"territory": "Ахты"}},
-        {"request": "Топ-5 сёл Дагестана по медицине",
-         "params": {"region": "Дагестан", "cluster": "V", "rank_by": "S1", "limit": 5}},
-        {"request": "Где в Чечне дольше всего ехать до больницы?",
-         "params": {"region": "Чечня", "rank_by": "F01", "order": "worst"}},
-    ],
-    "compare_territories": [
-        {"request": "Сравни Нальчик и Владикавказ", "params": {"territories": ["Нальчик", "Владикавказ"]}},
-    ],
-    "run_scenario": [
-        {"request": "Что будет, если открыть ФАП в Ахтах?",
-         "params": {"scenario_code": "W1", "territory": "Ахты", "params": {"kind": "fap"}}},
-        {"request": "Что если закрыть больницу в Буйнакске?", "params": {"scenario_code": "W2", "territory": "Буйнакск"}},
-        {"request": "Отремонтировать трассы в Ахтынском районе, минус 30% времени",
-         "params": {"scenario_code": "W6", "territory": "Ахтынский район", "params": {"percent": 30}}},
-    ],
-}
-
-
 class ChatTools:
     def __init__(self, container: Any) -> None:
         self.c = container
@@ -181,7 +161,7 @@ class ChatTools:
                 return await self._with_session(self._scenario, args, profile)
         except ValidationError as exc:
             raise ToolInputError(f"INVALID_INPUT: {exc.errors()[:3]}") from exc
-        raise ToolInputError(f"unknown tool {name}")
+        raise ToolInputError(f"unknown tool {name!r}: use get_index, compare_territories or run_scenario")
 
     async def _with_session(self, fn, args, profile):  # noqa: ANN001, ANN202
         async with self.c.sessionmaker() as session:
