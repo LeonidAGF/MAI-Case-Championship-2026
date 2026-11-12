@@ -1,4 +1,5 @@
-"""POI loading + spatial binding to municipalities (BE1 stage 1: "привязка POI к территориям").
+"""
+POI loading + spatial binding to municipalities (BE1 stage 1: "привязка POI к территориям").
 
 Input from the MLOps OSM filter (osmium tags-filter export):
   * GeoJSON FeatureCollection (points or polygons; polygons are reduced to a point on surface);

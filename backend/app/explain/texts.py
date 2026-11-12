@@ -1,4 +1,5 @@
-"""Deterministic Russian phrasing of feature values (no LLM): "Ближайшая школа — 12 минут на машине".
+"""
+Deterministic Russian phrasing of feature values (no LLM): "Ближайшая школа — 12 минут на машине".
 
 Texts never contain feature codes (stage 3 DoD). Features ML adds later fall back to
 "<name>: <value> <unit>".

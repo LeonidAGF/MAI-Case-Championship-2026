@@ -1,4 +1,5 @@
-"""The three chat functions (contract 9.3: get_index, compare_territories, run_scenario).
+"""
+The three chat functions (contract 9.3: get_index, compare_territories, run_scenario).
 
 Every number the assistant may say comes from these results (DB + scoring pipeline).
 Tools accept place names, so the model never needs ids or coordinates.

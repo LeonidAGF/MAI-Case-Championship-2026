@@ -1,4 +1,5 @@
-"""Knowledge documents and embeddings for the chat assistant.
+"""
+Knowledge documents and embeddings for the chat assistant.
 
 Input: .md/.txt (one document) or JSONL/CSV with columns text [, title, source_url,
 external_id | territory (+ region)]. Texts are chunked by paragraphs (~900 chars).

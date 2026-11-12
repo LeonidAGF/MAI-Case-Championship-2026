@@ -1,4 +1,5 @@
-"""GigaChat (Sber) REST client for the chat assistant: OAuth token cache + chat completions.
+"""
+GigaChat (Sber) REST client for the chat assistant: OAuth token cache + chat completions.
 
 API reference: https://developers.sber.ru/docs/ru/gigachat/api/reference/rest/post-chat
 * OAuth: POST GIGACHAT_AUTH_URL with ``Authorization: Basic <authorization key>``, a fresh

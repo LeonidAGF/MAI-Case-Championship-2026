@@ -1,5 +1,7 @@
-"""Precomputed territory -> POI travel times (contract 9.3: "Матрица времени (territory_id,
-poi_id, seconds, mode)"), produced by the ML/MLOps OSRM precompute. Used by what-if W2."""
+"""
+Precomputed territory -> POI travel times (contract 9.3: "Матрица времени (territory_id,
+poi_id, seconds, mode)"), produced by the ML/MLOps OSRM precompute. Used by what-if W2.
+"""
 
 from __future__ import annotations
 
