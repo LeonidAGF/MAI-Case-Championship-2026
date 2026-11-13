@@ -271,9 +271,9 @@ example and expects affected > 0 and monotonic deltas.
 - `chat-eval` calls the paid Anthropic API: run it only when the user explicitly asks. `chat-check`
   is free (it only reads the model's description).
 - `docker compose restart` doesn't reload `.env`. Use `docker compose up -d api`.
-- Compose reads the root `.env` (ports, passwords, `IMAGE_TAG`, `COMPOSE_PROFILES`, `LLM_PROXY_URL`).
-  `backend/.env` is the api's `env_file`, and the compose `environment` overrides it (`DATABASE_URL`,
-  `REDIS_URL`, the data folders, `TRUST_FORWARDED_FOR`, `LLM_PROXY_URL`).
+- Compose reads the root `.env` (ports, passwords, `IMAGE_TAG`, `COMPOSE_PROFILES`, `LLM_PROXY_URL`,
+  `CORS_ORIGINS`). `backend/.env` is the api's `env_file`, and the compose `environment` overrides it
+  (`DATABASE_URL`, `REDIS_URL`, the data folders, `TRUST_FORWARDED_FOR`, `LLM_PROXY_URL`, `CORS_ORIGINS`).
 - In Docker the API sits behind Caddy under `/api`: Caddy strips the prefix and
   `UVICORN_ROOT_PATH=/api` adds it back. Use http://localhost/api/docs; `http://localhost:8000/docs`
   doesn't load its schema, while other direct `:8000` requests (`/healthz`, `/metrics`) work.
@@ -282,5 +282,6 @@ example and expects affected > 0 and monotonic deltas.
   RU-KC, RU-SE, RU-CE, RU-STA).
 - The `db/models.py` docstring mentions `tests/integration/test_migrations.py`; the check actually
   lives in `test_api.py::test_migration_matches_models`.
-- The browser can reach the API only from origins listed in `CORS_ORIGINS` (default
-  `http://localhost:3000`).
+- The browser can reach the API only from origins listed in `CORS_ORIGINS` (comma-separated, default
+  `http://localhost:3000`): the root `.env` in Docker, `backend/.env` without Docker. The site itself
+  calls `/api` on its own origin and needs no entry.
