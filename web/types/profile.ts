@@ -12,7 +12,7 @@ export type MedicineThreshold = 15 | 30 | 60;
 export interface Profile {
 	v: 1;
 	preset: string | null;
-	weights: Record<Subindex, number>; // сумма = 100
+	weights: Record<Subindex, number>;
 	filters: {
 		mobility: Mobility;
 		medicine_threshold_min: MedicineThreshold;

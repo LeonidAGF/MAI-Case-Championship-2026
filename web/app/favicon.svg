@@ -1,0 +1,30 @@
+<svg width="768" height="768" xmlns="http://www.w3.org/2000/svg">
+ <style type="text/css">.st0{fill:#42210B;stroke:#000000;stroke-width:9;stroke-miterlimit:10;}
+	.st1{fill:#FFFFFF;}
+	.st2{fill:#42210B;}
+	.st3{fill:#808080;stroke:#000000;stroke-miterlimit:10;}
+	.st4{fill:#C69C6D;stroke:#000000;stroke-miterlimit:10;}
+	.st5{fill:#754C24;stroke:#000000;stroke-miterlimit:10;}</style>
+
+ <g>
+  <title>background</title>
+  <rect fill="none" id="canvas_background" height="770" width="770" y="-1" x="-1"/>
+ </g>
+ <g>
+  <title>Layer 1</title>
+  <g id="svg_1">
+   <g id="svg_2">
+    <path id="svg_3" d="m-553.73665,194.40334c1.93,0 1.93,-3 0,-3c-1.93,0 -1.93,3 0,3l0,0z"/>
+   </g>
+  </g>
+  <ellipse id="svg_4" ry="297.73" rx="300" cy="355.63334" cx="347.70002" class="st0"/>
+  <circle id="svg_5" r="203.61" cy="355.63334" cx="347.70002" class="st1"/>
+  <polygon id="svg_6" points="512.4199562072754,227.91333389282227 218.1200294494629,517.1833229064941 191.96002578735352,491.46335220336914 486.25998306274414,202.19333267211914 " class="st2"/>
+  <polygon id="svg_7" points="210.46002578735352,194.66333389282227 504.75998306274414,483.93332290649414 478.59994888305664,509.6433448791504 184.30002212524414,220.37335586547852 " class="st2"/>
+  <rect id="svg_8" height="36.36" width="416.2" class="st2" y="337.44334" x="144.09002"/>
+  <rect id="svg_9" height="37" width="409.09" class="st2" transform="matrix(1.154581e-7,1,-1,1.154581e-7,1006.9897,-9.8989) " y="636.29997" x="160.98332"/>
+  <circle id="svg_10" r="60.86" cy="355.63334" cx="352.19002" class="st3"/>
+  <rect id="svg_11" height="327.27" width="342.05" class="st4" y="387.44334" x="399.98002"/>
+  <rect id="svg_12" height="327.27" width="70.45" class="st5" y="387.44334" x="538.61002"/>
+ </g>
+</svg>

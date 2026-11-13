@@ -37,7 +37,6 @@ export default function ClimatePage() {
 			<header className="bg-white p-3 md:p-4 shadow-sm flex justify-between items-center z-20 shrink-0">
 				<div>
 					<h1 className="text-base md:text-xl font-bold text-gray-800">Карта климата 2025</h1>
-					<p className="text-xs text-gray-500">Данные NASA POWER, {grid?.period_label || '2025 год'}</p>
 				</div>
 				<Link href="/" className="text-xs md:text-sm font-medium text-blue-600 hover:underline shrink-0">
 					← Назад к атласу

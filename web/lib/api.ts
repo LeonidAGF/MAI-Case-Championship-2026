@@ -360,3 +360,7 @@ export async function fetchClimateGrid(season: Season) {
 export async function fetchClimateRegions(season: Season) {
 	return json<ClimateRegionsResponse>(await fetch(`${API}/climate/2025/regions?season=${season}`));
 }
+
+export async function fetchRegionBoundaries() {
+  	return json<any>(await fetch(`${API}/territories/geojson?level=region&simplify=0.01`));
+}
