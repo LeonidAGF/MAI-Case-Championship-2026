@@ -1,0 +1,1106 @@
+{
+  "uid": "atlas-partners",
+  "title": "04 · API для организаций",
+  "description": "Фактический спрос на выгрузки, география запросов, объём данных, скорость и нагрузка на PostgreSQL.",
+  "tags": [
+    "СКФО",
+    "Атлас",
+    "наблюдаемость"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "dataset",
+        "label": "Набор",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "atlas-prometheus"
+        },
+        "query": {
+          "query": "label_values(atlas_partner_api_requests_total, dataset)",
+          "refId": "A"
+        },
+        "regex": "",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "format",
+        "label": "Формат",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "atlas-prometheus"
+        },
+        "query": {
+          "query": "label_values(atlas_partner_api_requests_total, format)",
+          "refId": "A"
+        },
+        "regex": "",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "region",
+        "label": "Фильтр региона",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "atlas-prometheus"
+        },
+        "query": {
+          "query": "label_values(atlas_partner_api_requests_total, region)",
+          "refId": "A"
+        },
+        "regex": "",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Обращения к /v1 в минуту",
+      "description": "Все ответы /v1, включая проверку ключа, каталог и ошибки. Средняя частота за последние пять минут.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "60 * (sum(rate(atlas_partner_api_requests_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m])) or vector(0))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Выгрузки с запуска",
+      "description": "Успешно сформированные таблицы с последнего запуска контейнера API.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}) or vector(0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Строки с запуска",
+      "description": "Сумма строк в успешных выгрузках с запуска API; это не число строк в БД.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(atlas_partner_export_rows_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}) or vector(0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Объём с запуска",
+      "description": "Байты сформированных ответов до HTTP-сжатия с запуска API.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(atlas_partner_export_bytes_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}) or vector(0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 5,
+      "title": "p95 формирования",
+      "description": "Время построения и сериализации успешной выгрузки после проверки ключа; требуется фактический трафик.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(atlas_partner_export_generation_duration_seconds_bucket{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m])))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Лимит 429 с запуска",
+      "description": "Число запросов, отклонённых лимитом ключа с запуска API.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(atlas_partner_api_requests_total{status=\"429\",dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}) or vector(0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "yellow"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 7,
+      "title": "Успешные выгрузки по наборам",
+      "description": "Текущий спрос на каждый набор данных.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "60 * sum by (dataset) (rate(atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Ответы /v1 по статусу",
+      "description": "2xx, 4xx, 5xx и 429; ошибки авторизации также входят в статистику.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "60 * sum by (status) (rate(atlas_partner_api_requests_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Запрошенные субъекты с запуска",
+      "description": "Успешные выгрузки с явным параметром region с запуска API. Запросы всего округа и только по району не включены.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 8,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (region) (atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\",region=~\"RU-.*\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 10,
+      "title": "Наборы с запуска",
+      "description": "Сколько раз успешно выгружали каждый набор с запуска API.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 12,
+        "w": 8,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (dataset) (atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 11,
+      "title": "Данные по наборам с запуска",
+      "description": "Объём до сжатия с запуска API; показывает самые тяжёлые наборы.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 12,
+        "w": 8,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (dataset) (atlas_partner_export_bytes_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 12,
+      "title": "p95 формирования по наборам",
+      "description": "Время работы backend над успешной выгрузкой; не включает авторизацию и пересылку ответа.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, dataset) (rate(atlas_partner_export_generation_duration_seconds_bucket{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m])))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Объём выгрузок по наборам",
+      "description": "Байты сформированных ответов в секунду до сжатия.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (dataset) (rate(atlas_partner_export_bytes_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "SQL / мин для /v1",
+      "description": "Реальные SQL-операции, выполненные внутри запросов /v1, включая проверку ключа.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "60 * (sum(rate(atlas_db_statements_total{scope=\"partner\"}[5m])) or vector(0))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 15,
+      "title": "SQL на обращение /v1",
+      "description": "Среднее число SQL-операций на одно завершённое обращение /v1 за пять минут. Пока запрос выполняется, числитель может опережать счётчик ответов.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 5,
+        "y": 30,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(rate(atlas_db_statements_total{scope=\"partner\"}[5m])) or vector(0)) / clamp_min((sum(rate(atlas_partner_api_requests_total[5m])) or vector(0)), 0.001)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 16,
+      "title": "p95 SQL для /v1",
+      "description": "Только выполнение SQL курсором; ожидание соединения и обработка строк не входят.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 30,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(atlas_db_statement_duration_seconds_bucket{scope=\"partner\"}[5m])))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 17,
+      "title": "Соединения с БД заняты",
+      "description": "Все занятые соединения рабочих процессов API, включая публичные запросы и фоновые задачи.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 30,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "atlas_db_connections_in_use",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 18,
+      "title": "Ошибки SQL /v1 с запуска",
+      "description": "",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 30,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(atlas_db_statements_total{scope=\"partner\",outcome=\"error\"}) or vector(0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "red"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 19,
+      "title": "SQL-операции в минуту",
+      "description": "partner — запросы /v1; other — остальные HTTP-маршруты и фоновые задачи. Это SQL-операции, а не обращения к API.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "60 * sum by (scope, outcome) (rate(atlas_db_statements_total[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "title": "p95 SQL по источнику",
+      "description": "Время выполнения одного SQL-выражения для /v1 и остальной работы API.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 34,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, scope) (rate(atlas_db_statement_duration_seconds_bucket[5m])))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "Журнал обращений организаций",
+      "description": "Структурированный журнал: набор, регион фильтра, статус, длительность, id организации и ключа, строки и байты. Секретный ключ и почта не пишутся.",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "atlas-loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 12,
+        "h": 12
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{job=\"atlas\",service=\"api\"} | json | message=\"http_request\" | dataset!=\"\" | dataset=~\"$dataset\" | export_format=~\"$format\" | requested_region=~\"$region\"",
+          "datasource": {
+            "type": "loki",
+            "uid": "atlas-loki"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true
+      }
+    },
+    {
+      "id": 22,
+      "title": "Ошибки корпоративного API",
+      "description": "Ошибки 4xx/5xx; поле key_id есть только после успешного распознавания ключа.",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "atlas-loki"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 42,
+        "w": 12,
+        "h": 12
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{job=\"atlas\",service=\"api\"} | json | message=\"http_request\" | dataset!=\"\" | status=~\"4..|5..\"",
+          "datasource": {
+            "type": "loki",
+            "uid": "atlas-loki"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true
+      }
+    }
+  ]
+}

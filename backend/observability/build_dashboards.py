@@ -171,9 +171,46 @@ scenario = dashboard(
 )
 
 
+partners = dashboard(
+    "atlas-partners",
+    "04 · API для организаций",
+    "Фактический спрос на выгрузки, география запросов, объём данных, скорость и нагрузка на PostgreSQL.",
+    [
+        panel(1, "Обращения к /v1 в минуту", "60 * (sum(rate(atlas_partner_api_requests_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m])) or vector(0))", "stat", 0, 0, 4, 4, unit="reqpm", decimals=1, description="Все ответы /v1, включая проверку ключа, каталог и ошибки. Средняя частота за последние пять минут."),
+        panel(2, "Выгрузки с запуска", "sum(atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}) or vector(0)", "stat", 4, 0, 4, 4, decimals=0, description="Успешно сформированные таблицы с последнего запуска контейнера API."),
+        panel(3, "Строки с запуска", "sum(atlas_partner_export_rows_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}) or vector(0)", "stat", 8, 0, 4, 4, decimals=0, description="Сумма строк в успешных выгрузках с запуска API; это не число строк в БД."),
+        panel(4, "Объём с запуска", "sum(atlas_partner_export_bytes_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}) or vector(0)", "stat", 12, 0, 4, 4, unit="bytes", description="Байты сформированных ответов до HTTP-сжатия с запуска API."),
+        panel(5, "p95 формирования", "histogram_quantile(0.95, sum by (le) (rate(atlas_partner_export_generation_duration_seconds_bucket{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m])))", "stat", 16, 0, 4, 4, unit="s", decimals=2, description="Время построения и сериализации успешной выгрузки после проверки ключа; требуется фактический трафик."),
+        panel(6, "Лимит 429 с запуска", "sum(atlas_partner_api_requests_total{status=\"429\",dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}) or vector(0)", "stat", 20, 0, 4, 4, decimals=0, thresholds=[(None, "green"), (1, "yellow")], description="Число запросов, отклонённых лимитом ключа с запуска API."),
+        panel(7, "Успешные выгрузки по наборам", "60 * sum by (dataset) (rate(atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m]))", "timeseries", 0, 4, 12, 8, unit="reqpm", description="Текущий спрос на каждый набор данных."),
+        panel(8, "Ответы /v1 по статусу", "60 * sum by (status) (rate(atlas_partner_api_requests_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m]))", "timeseries", 12, 4, 12, 8, unit="reqpm", description="2xx, 4xx, 5xx и 429; ошибки авторизации также входят в статистику."),
+        panel(9, "Запрошенные субъекты с запуска", "sum by (region) (atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\",region=~\"RU-.*\"})", "bargauge", 0, 12, 8, 10, decimals=0, description="Успешные выгрузки с явным параметром region с запуска API. Запросы всего округа и только по району не включены."),
+        panel(10, "Наборы с запуска", "sum by (dataset) (atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"})", "bargauge", 8, 12, 8, 10, decimals=0, description="Сколько раз успешно выгружали каждый набор с запуска API."),
+        panel(11, "Данные по наборам с запуска", "sum by (dataset) (atlas_partner_export_bytes_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"})", "bargauge", 16, 12, 8, 10, unit="bytes", description="Объём до сжатия с запуска API; показывает самые тяжёлые наборы."),
+        panel(12, "p95 формирования по наборам", "histogram_quantile(0.95, sum by (le, dataset) (rate(atlas_partner_export_generation_duration_seconds_bucket{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m])))", "timeseries", 0, 22, 12, 8, unit="s", description="Время работы backend над успешной выгрузкой; не включает авторизацию и пересылку ответа."),
+        panel(13, "Объём выгрузок по наборам", "sum by (dataset) (rate(atlas_partner_export_bytes_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m]))", "timeseries", 12, 22, 12, 8, unit="Bps", description="Байты сформированных ответов в секунду до сжатия."),
+        panel(14, "SQL / мин для /v1", "60 * (sum(rate(atlas_db_statements_total{scope=\"partner\"}[5m])) or vector(0))", "stat", 0, 30, 5, 4, unit="reqpm", decimals=1, description="Реальные SQL-операции, выполненные внутри запросов /v1, включая проверку ключа."),
+        panel(15, "SQL на обращение /v1", "(sum(rate(atlas_db_statements_total{scope=\"partner\"}[5m])) or vector(0)) / clamp_min((sum(rate(atlas_partner_api_requests_total[5m])) or vector(0)), 0.001)", "stat", 5, 30, 5, 4, decimals=1, description="Среднее число SQL-операций на одно завершённое обращение /v1 за пять минут. Пока запрос выполняется, числитель может опережать счётчик ответов."),
+        panel(16, "p95 SQL для /v1", "histogram_quantile(0.95, sum by (le) (rate(atlas_db_statement_duration_seconds_bucket{scope=\"partner\"}[5m])))", "stat", 10, 30, 5, 4, unit="s", decimals=3, description="Только выполнение SQL курсором; ожидание соединения и обработка строк не входят."),
+        panel(17, "Соединения с БД заняты", "atlas_db_connections_in_use", "stat", 15, 30, 5, 4, description="Все занятые соединения рабочих процессов API, включая публичные запросы и фоновые задачи."),
+        panel(18, "Ошибки SQL /v1 с запуска", "sum(atlas_db_statements_total{scope=\"partner\",outcome=\"error\"}) or vector(0)", "stat", 20, 30, 4, 4, decimals=0, thresholds=[(None, "green"), (1, "red")]),
+        panel(19, "SQL-операции в минуту", "60 * sum by (scope, outcome) (rate(atlas_db_statements_total[5m]))", "timeseries", 0, 34, 12, 8, unit="reqpm", description="partner — запросы /v1; other — остальные HTTP-маршруты и фоновые задачи. Это SQL-операции, а не обращения к API."),
+        panel(20, "p95 SQL по источнику", "histogram_quantile(0.95, sum by (le, scope) (rate(atlas_db_statement_duration_seconds_bucket[5m])))", "timeseries", 12, 34, 12, 8, unit="s", description="Время выполнения одного SQL-выражения для /v1 и остальной работы API."),
+        panel(21, "Журнал обращений организаций", "{job=\"atlas\",service=\"api\"} | json | message=\"http_request\" | dataset!=\"\" | dataset=~\"$dataset\" | export_format=~\"$format\" | requested_region=~\"$region\"", "logs", 0, 42, 12, 12, datasource=LOKI, description="Структурированный журнал: набор, регион фильтра, статус, длительность, id организации и ключа, строки и байты. Секретный ключ и почта не пишутся."),
+        panel(22, "Ошибки корпоративного API", "{job=\"atlas\",service=\"api\"} | json | message=\"http_request\" | dataset!=\"\" | status=~\"4..|5..\"", "logs", 12, 42, 12, 12, datasource=LOKI, description="Ошибки 4xx/5xx; поле key_id есть только после успешного распознавания ключа."),
+    ],
+    [
+        query_variable("dataset", "Набор", "label_values(atlas_partner_api_requests_total, dataset)"),
+        query_variable("format", "Формат", "label_values(atlas_partner_api_requests_total, format)"),
+        query_variable("region", "Фильтр региона", "label_values(atlas_partner_api_requests_total, region)"),
+    ],
+)
+
+
 def main() -> None:
     ROOT.mkdir(parents=True, exist_ok=True)
-    for filename, content in (("service.json", service), ("data.json", data), ("scenarios.json", scenario)):
+    for filename, content in (("service.json", service), ("data.json", data), ("scenarios.json", scenario),
+                              ("partners.json", partners)):
         (ROOT / filename).write_text(json.dumps(content, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 

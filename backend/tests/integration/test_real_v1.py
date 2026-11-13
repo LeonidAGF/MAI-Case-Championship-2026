@@ -13,6 +13,7 @@ from sqlalchemy import text
 from app.ambulance.config import load_ambulance_config
 from app.ambulance.dem import find_tile
 from app.core.config import REPO_DIR
+from app.core.db_metrics import DB_STATEMENTS
 from app.db.session import make_engine, make_sessionmaker
 from app.etl.ambulance import load_ambulance
 from app.etl.demo import clear_demo_features
@@ -21,6 +22,7 @@ from app.etl.poi import load_poi
 from app.partners import store
 from app.partners.keys import MSK, end_of_day
 from app.partners.tables import BOM
+from app.partners.telemetry import PARTNER_REQUESTS
 from app.payments.service import cancel_order, confirm_order, create_order, extended_until, issue_key_for_order, list_orders
 from tests.integration.conftest import territory_id
 
@@ -77,6 +79,8 @@ async def org_key(real, test_settings):  # noqa: ANN001, ANN201
 
 
 async def test_key_is_required(client, org_key) -> None:  # noqa: ANN001
+    partner_sql_before = DB_STATEMENTS.labels("partner", "success")._value.get()
+    requests_before = PARTNER_REQUESTS.labels("account", "json", "n/a", "200")._value.get()
     r = await client.get("/v1/me")
     assert r.status_code == 401 and r.json()["code"] == "api_key_missing" and r.headers["www-authenticate"] == "Bearer"
     r = await client.get("/v1/me", headers=auth("pulse_" + "x" * 43))
@@ -85,6 +89,8 @@ async def test_key_is_required(client, org_key) -> None:  # noqa: ANN001
     me = (await client.get("/v1/me", headers={"X-API-Key": org_key["key"]})).json()
     assert me["organisation"] == ORG and me["key_prefix"] == org_key["prefix"]
     assert [s["code"] for s in me["scopes"]] == ["datasets"] and me["rate_limit_per_minute"] == 120
+    assert DB_STATEMENTS.labels("partner", "success")._value.get() > partner_sql_before
+    assert PARTNER_REQUESTS.labels("account", "json", "n/a", "200")._value.get() == requests_before + 1
 
 
 async def test_catalog(client, org_key) -> None:  # noqa: ANN001

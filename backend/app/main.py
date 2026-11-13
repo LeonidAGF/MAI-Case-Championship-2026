@@ -20,9 +20,11 @@ from app.api.routes import (
 )
 from app.container import Container, build_container
 from app.core.config import Settings, get_settings
+from app.core.db_metrics import DB_SCOPE
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
 from app.core.metrics import HTTP_DURATION, HTTP_INFLIGHT, HTTP_REQUESTS, collect_data_metrics, exposition, mark_worker_dead
+from app.partners.telemetry import PARTNER_DURATION, PARTNER_REQUESTS, request_labels
 
 log = logging.getLogger(__name__)
 
@@ -84,6 +86,7 @@ class MetricsMiddleware:
         started = time.perf_counter()
         method = scope["method"]
         status = 500
+        db_scope_token = DB_SCOPE.set("partner") if scope["path"].startswith("/v1/") else None
         HTTP_INFLIGHT.inc()
 
         async def send_wrapper(message: Message) -> None:
@@ -95,13 +98,29 @@ class MetricsMiddleware:
         try:
             await self.app(scope, receive, send_wrapper)
         finally:
-            route = getattr(scope.get("route"), "path", "unmatched")
-            elapsed = time.perf_counter() - started
-            HTTP_REQUESTS.labels(method, route, str(status)).inc()
-            HTTP_DURATION.labels(method, route).observe(elapsed)
-            HTTP_INFLIGHT.dec()
-            if route != "/healthz":
-                log.info("http_request", extra={"method": method, "route": route, "status": status, "duration_ms": round(elapsed * 1000, 1)})
+            try:
+                route = getattr(scope.get("route"), "path", "unmatched")
+                elapsed = time.perf_counter() - started
+                HTTP_REQUESTS.labels(method, route, str(status)).inc()
+                HTTP_DURATION.labels(method, route).observe(elapsed)
+                HTTP_INFLIGHT.dec()
+                fields = {"method": method, "route": route, "status": status, "duration_ms": round(elapsed * 1000, 1)}
+                partner = request_labels(scope)
+                if partner is not None:
+                    dataset, fmt, region = partner
+                    PARTNER_REQUESTS.labels(dataset, fmt, region, str(status)).inc()
+                    PARTNER_DURATION.labels(dataset, fmt, region).observe(elapsed)
+                    fields.update(dataset=dataset, export_format=fmt, requested_region=region)
+                    state = scope.get("state") or {}
+                    for key in ("organisation_id", "key_id", "export_rows", "export_bytes"):
+                        value = state.get(f"partner_{key}")
+                        if value is not None:
+                            fields[key] = value
+                if route != "/healthz":
+                    log.info("http_request", extra=fields)
+            finally:
+                if db_scope_token is not None:
+                    DB_SCOPE.reset(db_scope_token)
 
 
 def create_app(container_factory: Callable[[Settings], Container] | None = None) -> FastAPI:

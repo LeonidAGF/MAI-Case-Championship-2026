@@ -84,6 +84,8 @@ def api_key(scope: str = "datasets"):  # noqa: ANN201
                 headers=BEARER,
             )
         principal = await authenticate(c.sessionmaker, raw)
+        request.state.partner_organisation_id = principal.organisation_id
+        request.state.partner_key_id = principal.key_id
         if scope not in principal.scopes:
             raise Forbidden("Этот ключ не даёт доступа к запросу", code="api_key_scope")
         limit = principal.rate_limit_per_minute or c.settings.rate_limit_api_key_per_minute

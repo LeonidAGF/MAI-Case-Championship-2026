@@ -31,3 +31,19 @@ groups:
           severity: info
         annotations:
           summary: Деморежим — индекс использует синтетические значения признаков
+  - name: atlas-partners
+    rules:
+      - alert: AtlasPartnerApiServerErrors
+        expr: (sum(rate(atlas_partner_api_requests_total{status=~"5.."}[5m])) / sum(rate(atlas_partner_api_requests_total[5m]))) > 0.05 and sum(increase(atlas_partner_api_requests_total[5m])) >= 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Более 5% обращений к API организаций завершаются ошибкой сервера при достаточном трафике
+      - alert: AtlasPartnerApiRateLimitPressure
+        expr: sum(increase(atlas_partner_api_requests_total{status="429"}[10m])) >= 10
+        for: 2m
+        labels:
+          severity: info
+        annotations:
+          summary: За 10 минут API организаций не менее 10 раз отклонил запрос по лимиту ключа
