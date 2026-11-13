@@ -1,7 +1,7 @@
 import { Profile } from '@/types/profile';
 import { encodeProfile } from './profile';
 
-export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+export const API = process.env.NEXT_PUBLIC_API_URL ?? 'https://cson.site';
 
 export class ApiError extends Error {
 	code?: string;

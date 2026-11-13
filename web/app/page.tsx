@@ -31,7 +31,7 @@ function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
 					<Link href="/compare" className="p-3 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">Сравнить</Link>
 					<Link href="/whatif" className="p-3 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">Что если</Link>
 					<Link href="/whatif" className="p-3 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">API</Link>
-					<Link href="http://localhost:3001" target="_blank" rel="noopener noreferrer" className="p-3 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">Grafana</Link>
+					<Link href="https://cson.site:3001" target="_blank" rel="noopener noreferrer" className="p-3 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">Grafana</Link>
 				</nav>
 			</aside>
 		</>
