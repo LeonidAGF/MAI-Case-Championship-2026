@@ -12,7 +12,7 @@ import hashlib
 import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 PROFILE_SCHEMA_VERSION = 1
 TOTAL_SUBINDICES: tuple[str, ...] = ("S1", "S2", "S3", "S4", "S5", "S6")
@@ -23,6 +23,27 @@ CLUSTERS_BY_TERRITORY_TYPES: dict[str, tuple[str, ...]] = {
     "with_towns": ("A", "B"),
     "all": ("A", "B", "V"),
 }
+
+
+class ClimateRange(BaseModel):
+    """Desired seasonal conditions for the main map; values are user preferences."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    temperature_min_c: float = Field(ge=-60, le=60)
+    temperature_max_c: float = Field(ge=-60, le=60)
+    humidity_min_pct: float | None = Field(None, ge=0, le=100)
+    humidity_max_pct: float | None = Field(None, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def check_ranges(self) -> "ClimateRange":
+        if self.temperature_min_c > self.temperature_max_c:
+            raise ValueError("temperature_min_c must not exceed temperature_max_c")
+        if (self.humidity_min_pct is None) != (self.humidity_max_pct is None):
+            raise ValueError("humidity_min_pct and humidity_max_pct must be set together")
+        if self.humidity_min_pct is not None and self.humidity_min_pct > self.humidity_max_pct:
+            raise ValueError("humidity_min_pct must not exceed humidity_max_pct")
+        return self
 
 
 class ProfileFilters(BaseModel):
@@ -40,11 +61,23 @@ class ProfileFilters(BaseModel):
     climate_sensitivity: Literal["high", "mid", "low"] = Field(
         "mid", description="Климатическая чувствительность"
     )
+    desired_climate: dict[Literal["winter", "spring", "summer", "autumn"], ClimateRange] | None = Field(
+        None, description="Желаемые сезонные температура и, при необходимости, влажность"
+    )
+    climate_match_min: float | None = Field(None, ge=0, le=1, description="Минимальное совпадение с предпочтениями")
     territory_types: Literal["cities", "with_towns", "all"] = Field(
         "all", description="Тип территории-кандидата (кластеры А/Б/В)"
     )
     pace: Literal["active", "calm"] = Field("calm", description="Темп жизни")
     realtor_mode: bool = Field(False, description="Режим риелтора (бейдж S7)")
+
+    @model_validator(mode="after")
+    def check_climate_filter(self) -> "ProfileFilters":
+        if self.desired_climate is not None and not self.desired_climate:
+            raise ValueError("desired_climate must contain at least one season")
+        if self.climate_match_min is not None and self.desired_climate is None:
+            raise ValueError("climate_match_min requires desired_climate")
+        return self
 
 
 def _canonical_number(x: float) -> float | int:

@@ -78,6 +78,8 @@ class IndexItem(BaseModel):
     rank: int
     subindices: dict[str, float | None]
     attractiveness: Attractiveness | None
+    climate_match: float | None = None
+    climate_adjustment_points: float = 0.0
 
 
 class ClusterStats(BaseModel):
@@ -105,6 +107,8 @@ class IndexSingle(IndexMeta):
     subindices: dict[str, float | None]
     attractiveness: Attractiveness | None
     result_id: int
+    climate_match: float | None = None
+    climate_adjustment_points: float = 0.0
 
 
 class GroupItem(BaseModel):
@@ -144,6 +148,7 @@ class WaterfallStep(BaseModel):
     value_mode: str
     text: str
     typical_text: str | None
+    display_in_bar_chart: bool = Field(True, description="Фронтенд: климатические компоненты S6 показывать в паспорте, не в зелёных полосах")
 
 
 class ProCon(BaseModel):
@@ -171,6 +176,10 @@ class ExplainResponse(IndexMeta):
     subindices: dict[str, float | None]
     attractiveness: Attractiveness | None
     baseline: float = Field(description="Типичная территория кластера: сумма медианных вкладов")
+    climate_delta: float = Field(0, description="Сумма delta климатических компонентов внутри waterfall")
+    climate_contribution: float = Field(0, description="Вклад S6 в общий балл")
+    climate_match: float | None = None
+    climate_adjustment_points: float = 0.0
     waterfall: list[WaterfallStep]
     pluses: list[ProCon]
     minuses: list[ProCon]

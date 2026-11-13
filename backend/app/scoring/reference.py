@@ -11,8 +11,9 @@ Reference implementation of the published formula (report 4.3 + 5.3 a/b).
   redistributed inside the subindex (same for subindices without data).
 
 This is the backend's stand-in so the API works end-to-end. The model is ML's:
-they replace it via SCORING_ENGINE without touching this file. Profile filters are
-passed through in the request but not interpreted here.
+they replace it via SCORING_ENGINE. Seasonal preference multiplies S6's
+normalized contribution by a 2025-data match; the component sum still equals
+the total, with no new visible criterion.
 """
 
 from __future__ import annotations
@@ -66,6 +67,7 @@ class ReferenceIndexEngine:
 
         raw_cols: dict[str, np.ndarray] = {}
         norm_cols: dict[str, np.ndarray] = {}
+        base_norm_cols: dict[str, np.ndarray] = {}
         imputed_cols: dict[str, np.ndarray] = {}
         available: set[str] = set()
 
@@ -87,8 +89,18 @@ class ReferenceIndexEngine:
             norm = _normalizer(ref, lo_q=lo_q, hi_q=hi_q, min_size=min_size)(x)
             if f.direction == "lower_better":
                 norm = 1.0 - norm
+            base_norm_cols[f.code] = norm
             norm_cols[f.code] = norm
             imputed_cols[f.code] = imputed
+
+        match_values = np.array([request.climate_matches.get(t, 1.0) for t in target_ids], dtype=float)
+        sensitivity = {"high": 1.0, "mid": 0.75, "low": 0.5}.get(
+            request.filters.get("climate_sensitivity"), 0.75
+        )
+        multipliers = 1.0 - sensitivity * (1.0 - np.clip(match_values, 0.0, 1.0))
+        for f in features:
+            if f.subindex == "S6" and f.code in norm_cols:
+                norm_cols[f.code] = base_norm_cols[f.code] * multipliers
 
         # Feature shares inside each subindex (only features with data).
         by_sub: dict[str, list[FeatureSpec]] = {}
@@ -96,6 +108,7 @@ class ReferenceIndexEngine:
             by_sub.setdefault(f.subindex, []).append(f)
         inner_share: dict[str, float] = {}
         sub_scores: dict[str, np.ndarray | None] = {}
+        base_climate_score = np.zeros(n_targets)
         for sub, feats in by_sub.items():
             live = [f for f in feats if f.code in available and f.weight > 0]
             wsum = sum(f.weight for f in live)
@@ -107,6 +120,8 @@ class ReferenceIndexEngine:
                 share = f.weight / wsum
                 inner_share[f.code] = share
                 acc += share * norm_cols[f.code]
+                if sub == "S6":
+                    base_climate_score += share * base_norm_cols[f.code]
             sub_scores[sub] = acc
 
         totals = list(request.total_subindices)
@@ -132,6 +147,10 @@ class ReferenceIndexEngine:
         sub_lists = {s: (None if arr is None else (100.0 * arr).tolist()) for s, arr in sub_scores.items()}
         sub_codes = list(dict.fromkeys([*by_sub, *totals]))
         totals_list = np.clip(total_arr, 0.0, 100.0).tolist()
+        climate_adjustment = (
+            100.0 * outer_share.get("S6", 0.0) * (sub_scores["S6"] - base_climate_score)
+            if sub_scores.get("S6") is not None else np.zeros(n_targets)
+        )
 
         result: dict[int, TerritoryScore] = {}
         for i, tid in enumerate(target_ids):
@@ -148,6 +167,8 @@ class ReferenceIndexEngine:
                 subindices=subindices,
                 attractiveness=subindices.get(attr_sub) if attr_sub else None,
                 components=components,
+                climate_match=request.climate_matches.get(tid),
+                climate_adjustment_points=float(climate_adjustment[i]),
             )
         return result
 

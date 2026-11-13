@@ -44,6 +44,8 @@ class Explanation:
     minuses: list[dict]
     attractiveness_factors: list[dict]
     summary: str
+    climate_delta: float = 0.0
+    climate_contribution: float = 0.0
 
 
 def explain_territory(
@@ -60,6 +62,7 @@ def explain_territory(
     total_subs = set(cfg.total_subindices)
 
     raw_steps: list[dict] = []
+    climate_steps: list[dict] = []
     attractiveness: list[dict] = []
     for comp in score.components:
         fcfg = cfg.features[comp.feature_code]
@@ -92,16 +95,20 @@ def explain_territory(
             "value_mode": mode,
             "text": text,
             "typical_text": typical,
+            "display_in_bar_chart": fcfg.subindex != "S6",
             "_text_with_typical": text_with_typical,
         }
         if fcfg.subindex in total_subs:
             raw_steps.append(item)
+            if fcfg.subindex == "S6":
+                climate_steps.append(item)
         elif comp.normalized is not None:
             attractiveness.append(
                 {k: item[k] for k in ("feature_code", "label", "raw_value", "unit", "normalized", "text")}
             )
 
     baseline = sum(s["median_contribution"] for s in raw_steps)
+    climate_contribution = sum(s["contribution"] for s in climate_steps)
     total_r = round(score.total, 1)
     baseline_r = round(baseline, 1)
     deltas = [s["contribution"] - s["median_contribution"] for s in raw_steps]
@@ -112,7 +119,9 @@ def explain_territory(
         s["contribution"] = round(s["contribution"], 3)
         s["median_contribution"] = round(s["median_contribution"], 3)
 
-    candidates = [s for s in raw_steps if not s["imputed"] and s["normalized"] is not None]
+    climate_delta_r = round(sum(s["delta"] for s in climate_steps), 1)
+    candidates = [s for s in raw_steps if s["display_in_bar_chart"]
+                  and not s["imputed"] and s["normalized"] is not None]
     pluses = sorted((s for s in candidates if s["delta_raw"] > MIN_DELTA), key=lambda s: -s["delta_raw"])[:3]
     minuses = sorted((s for s in candidates if s["delta_raw"] < -MIN_DELTA), key=lambda s: s["delta_raw"])[:3]
 
@@ -157,6 +166,8 @@ def explain_territory(
         minuses=minuses_out,
         attractiveness_factors=attractiveness,
         summary=summary,
+        climate_delta=climate_delta_r,
+        climate_contribution=round(climate_contribution, 1),
     )
 
 
