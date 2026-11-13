@@ -117,6 +117,39 @@ async def test_settlements_for_programs_and_for_excel(client, org_key) -> None: 
     assert excel.content[len(BOM):].decode("utf-8").splitlines()[0].startswith("id территории;Код OpenStreetMap;Населённый пункт;")
 
 
+async def test_search_detail_and_single_settlement_exports(client, org_key) -> None:
+    akhty = await territory_id(client, "Ахты")
+    headers = auth(org_key["key"])
+    search = await client.get("/v1/settlements", params={"q": "ахты", "region": "RU-DA"}, headers=headers)
+    assert search.status_code == 200
+    matches = search.json()
+    assert matches["total"] >= 1
+    match = next(item for item in matches["items"] if item["id"] == akhty["id"])
+    assert match["municipality_id"] == akhty["parent_id"]
+    assert match["region_code"] == "RU-DA"
+    detail = await client.get(f"/v1/settlements/{akhty['id']}", params={"profile": "family"}, headers=headers)
+    assert detail.status_code == 200
+    body = detail.json()
+    public_index = (await client.get("/index", params={"territory_id": akhty["id"], "profile": "family"})).json()
+    assert body["settlement"]["territory_id"] == akhty["id"]
+    assert body["index"]["total"] == public_index["total"]
+    assert body["features"] and all(row["territory_id"] == akhty["id"] for row in body["features"])
+    assert body["ambulance_status"] in {"available", "no_estimate", "not_computed"}
+    index = await client.get("/v1/datasets/index.json", params={"territory_id": akhty["id"]}, headers=headers)
+    assert index.status_code == 200 and index.json()["total"] == 1
+    assert index.json()["items"][0]["territory_id"] == akhty["id"]
+    assert index.json()["meta"]["filters"]["territory_id"] == akhty["id"]
+    csv = await client.get("/v1/datasets/features.csv", params={"territory_id": akhty["id"]}, headers=headers)
+    assert csv.status_code == 200 and f"_t{akhty['id']}" in csv.headers["content-disposition"]
+    assert len(csv.text.splitlines()) == len(body["features"]) + 1
+    missing = await client.get("/v1/datasets/settlements.json", params={"territory_id": 999999999}, headers=headers)
+    assert missing.status_code == 404 and missing.json()["code"] == "settlement_not_found"
+    mismatch = await client.get("/v1/datasets/settlements.json", params={"territory_id": akhty["id"], "region": "RU-KB"}, headers=headers)
+    assert mismatch.status_code == 404 and mismatch.json()["code"] == "settlement_not_found"
+    invalid = await client.get("/v1/datasets/municipalities.json", params={"territory_id": akhty["id"]}, headers=headers)
+    assert invalid.status_code == 422 and invalid.json()["code"] == "territory_filter_unsupported"
+
+
 async def test_features_long_and_wide_agree(client, org_key) -> None:  # noqa: ANN001
     akhty = await territory_id(client, "Ахты")
     params = {"municipality_id": akhty["parent_id"]}

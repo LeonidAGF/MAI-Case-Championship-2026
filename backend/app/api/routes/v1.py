@@ -16,9 +16,23 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import api_key, get_container, get_session, normalize_cluster, profile_query
-from app.api.schemas import V1Catalog, V1Me
-from app.core.errors import KEY_RESPONSES, ErrorResponse
-from app.partners.datasets import ATTRIBUTION_ASCII, DATASETS, Ctx, base_meta, build_scenario_run, check_filters, scenario_columns
+from app.api.schemas import V1Catalog, V1Me, V1SettlementDetail, V1SettlementSearch
+from app.core.errors import KEY_RESPONSES, ErrorResponse, ServiceUnavailable, ValidationFailed
+from app.partners.datasets import (
+    ATTRIBUTION_ASCII,
+    DATASETS,
+    Ctx,
+    base_meta,
+    build_ambulance,
+    build_features,
+    build_index,
+    build_scenario_run,
+    build_settlements,
+    check_filters,
+    require_settlement,
+    scenario_columns,
+    search_settlements,
+)
 from app.partners.store import SCOPES, Principal
 from app.partners.tables import Table, to_csv, to_json
 from app.partners.telemetry import record_export
@@ -109,14 +123,66 @@ async def catalog(request: Request, session: AsyncSession = Depends(get_session)
     return V1Catalog(meta=await base_meta(Ctx(c, session)), datasets=datasets, notes=NOTES)
 
 
+@router.get("/settlements", response_model=V1SettlementSearch, responses=KEY_RESPONSES,
+            summary="Поиск населённого пункта по названию с районом и субъектом")
+async def settlements_search(
+    request: Request,
+    q: str = Query(..., min_length=2, max_length=100, description="Название или его часть"),
+    region: str | None = Query(None, description="Код субъекта ISO 3166-2"),
+    municipality_id: int | None = Query(None, description="id района"),
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> V1SettlementSearch:
+    request.state.partner_operation = "search"
+    ctx = Ctx(get_container(request), session, region=region.strip().upper() if region else None,
+              municipality_id=municipality_id)
+    await check_filters(ctx)
+    total, items = await search_settlements(ctx, q, limit, offset)
+    request.state.partner_search_results = total
+    return V1SettlementSearch(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/settlements/{territory_id}", response_model=V1SettlementDetail, responses=KEY_RESPONSES,
+            summary="Данные одного населённого пункта: индекс, признаки, скорая")
+async def settlement_detail(
+    territory_id: int,
+    request: Request,
+    profile: Profile = Depends(profile_query),
+    session: AsyncSession = Depends(get_session),
+) -> V1SettlementDetail:
+    request.state.partner_operation = "detail"
+    ctx = Ctx(get_container(request), session, territory_id=territory_id, profile=profile, mode=profile.mode)
+    place = await require_settlement(ctx)
+    request.state.partner_territory_id = place.id
+    request.state.partner_settlement_name = place.name
+    request.state.partner_settlement_region = place.region_code
+    settlement = (await build_settlements(ctx)).rows[0]
+    index_table = await build_index(ctx)
+    features = (await build_features(ctx)).rows
+    ambulance = None
+    ambulance_status = "not_computed"
+    try:
+        ambulance_rows = (await build_ambulance(ctx)).rows
+        ambulance = ambulance_rows[0] if ambulance_rows else None
+        ambulance_status = "available" if ambulance is not None else "no_estimate"
+    except ServiceUnavailable as exc:
+        if exc.code != "ambulance_not_computed":
+            raise
+    return V1SettlementDetail(settlement=settlement, index=index_table.rows[0] if index_table.rows else None,
+                              features=features, ambulance=ambulance, ambulance_status=ambulance_status,
+                              meta=index_table.meta)
+
+
 @router.get("/datasets/{dataset}.{fmt}", responses=FILE_RESPONSES, response_class=Response,
-            summary="Набор данных в CSV или JSON (фильтры по субъекту, району, кластеру)")
+            summary="Набор данных в CSV или JSON (фильтры по субъекту, району, кластеру, пункту)")
 async def dataset(
     dataset: DatasetName,
     fmt: Fmt,
     request: Request,
     region: str | None = Query(None, description="Код субъекта ISO 3166-2, напр. RU-DA"),
     municipality_id: int | None = Query(None, description="id района"),
+    territory_id: int | None = Query(None, description="id населённого пункта; кроме набора municipalities"),
     cluster: str | None = Query(None, description="A | B | V (или А/Б/В)"),
     mode: Literal["car", "foot"] = Query("car", description="features: способ передвижения для времени в пути"),
     layout: Literal["long", "wide"] = Query("long", description="features: строка на значение или на пункт"),
@@ -127,14 +193,28 @@ async def dataset(
     started = time.perf_counter()
     c = get_container(request)
     region = region.strip().upper() if region else None
+    if territory_id is not None:
+        request.state.partner_operation = "export"
+        if dataset is DatasetName.municipalities:
+            raise ValidationFailed(
+                "Фильтр territory_id не применим к набору municipalities", code="territory_filter_unsupported"
+            )
     ctx = Ctx(c, session, region=region, municipality_id=municipality_id, cluster=normalize_cluster(cluster),
-              profile=profile, mode=mode, layout=layout)
+              territory_id=territory_id, profile=profile, mode=mode, layout=layout)
     await check_filters(ctx)
+    if territory_id is not None:
+        place = await require_settlement(ctx)
+        request.state.partner_territory_id = place.id
+        request.state.partner_settlement_name = place.name
+        request.state.partner_settlement_region = place.region_code
     table = await DATASETS[dataset.value].build(ctx)
-    observed_region = (
-        region if region else "by_municipality" if municipality_id is not None else "all"
-    )
-    return _respond(request, table, fmt, excel, _filename(dataset.value, region, municipality_id), observed_region, started)
+    observed_region = region or ("by_municipality" if municipality_id is not None else "all")
+    if territory_id is not None:
+        observed_region = place.region_code
+    filename = _filename(dataset.value, region, municipality_id)
+    if territory_id is not None:
+        filename = f"{filename}_t{territory_id}"
+    return _respond(request, table, fmt, excel, filename, observed_region, started)
 
 
 @router.get("/scenario-runs/{run_id}.{fmt}", responses=FILE_RESPONSES, response_class=Response,

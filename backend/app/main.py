@@ -24,7 +24,7 @@ from app.core.db_metrics import DB_SCOPE
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
 from app.core.metrics import HTTP_DURATION, HTTP_INFLIGHT, HTTP_REQUESTS, collect_data_metrics, exposition, mark_worker_dead
-from app.partners.telemetry import PARTNER_DURATION, PARTNER_REQUESTS, request_labels
+from app.partners.telemetry import PARTNER_DURATION, PARTNER_REQUESTS, SETTLEMENT_REQUESTS, SETTLEMENT_SEARCH_EMPTY, api_path, request_labels
 
 log = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class MetricsMiddleware:
         started = time.perf_counter()
         method = scope["method"]
         status = 500
-        db_scope_token = DB_SCOPE.set("partner") if scope["path"].startswith("/v1/") else None
+        db_scope_token = DB_SCOPE.set("partner") if api_path(scope).startswith("/v1/") else None
         HTTP_INFLIGHT.inc()
 
         async def send_wrapper(message: Message) -> None:
@@ -113,10 +113,19 @@ class MetricsMiddleware:
                     PARTNER_DURATION.labels(dataset, fmt, region).observe(elapsed)
                     fields.update(dataset=dataset, export_format=fmt, requested_region=region)
                     state = scope.get("state") or {}
-                    for key in ("organisation_id", "key_id", "export_rows", "export_bytes"):
+                    operation = state.get("partner_operation")
+                    if operation in {"search", "detail", "export"}:
+                        SETTLEMENT_REQUESTS.labels(operation, dataset, region, str(status)).inc()
+                        fields["partner_operation"] = operation
+                    if operation == "search" and status == 200 and state.get("partner_search_results") == 0:
+                        SETTLEMENT_SEARCH_EMPTY.labels(region).inc()
+                    for key in ("organisation_id", "key_id", "export_rows", "export_bytes", "search_results",
+                                "territory_id", "settlement_name", "settlement_region"):
                         value = state.get(f"partner_{key}")
                         if value is not None:
                             fields[key] = value
+                    if operation in {"detail", "export"} and status == 200 and state.get("partner_territory_id") is not None:
+                        fields["settlement_request"] = True
                 if route != "/healthz":
                     log.info("http_request", extra=fields)
             finally:

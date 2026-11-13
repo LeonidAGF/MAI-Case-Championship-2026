@@ -12,7 +12,7 @@ from app.core.logging import JsonFormatter
 from app.core.db_metrics import DB_CONNECTIONS_IN_USE, DB_SCOPE, DB_STATEMENTS, install_db_metrics
 from app.core.metrics import HTTP_REQUESTS
 from app.main import MetricsMiddleware
-from app.partners.telemetry import EXPORT_BYTES, EXPORT_ROWS, EXPORTS, PARTNER_REQUESTS, record_export, request_labels
+from app.partners.telemetry import EXPORT_BYTES, EXPORT_ROWS, EXPORTS, PARTNER_REQUESTS, SETTLEMENT_REQUESTS, api_path, record_export, request_labels
 
 
 def _counter(method: str, route: str, status: str) -> float:
@@ -65,11 +65,18 @@ def test_partner_labels_are_bounded_and_distinguish_region_filters() -> None:
     scope["path_params"] = {"dataset": "unbounded-user-dataset", "fmt": "xml"}
     assert request_labels(scope) == ("invalid", "invalid", "invalid")
     assert request_labels({"path": "/v1/me", "route": SimpleNamespace(path="/v1/me")}) == ("account", "json", "n/a")
+    assert request_labels({"path": "/v1/settlements", "route": SimpleNamespace(path="/v1/settlements")}) == ("settlement_search", "json", "all")
+    assert request_labels({"path": "/v1/settlements/123", "route": SimpleNamespace(path="/v1/settlements/{territory_id}"),
+                           "state": {"partner_settlement_region": "RU-DA"}}) == ("settlement_detail", "json", "RU-DA")
+    assert api_path({"path": "/api/v1/settlements/123", "root_path": "/api"}) == "/v1/settlements/123"
+    assert request_labels({"path": "/api/v1/settlements", "root_path": "/api",
+                           "route": SimpleNamespace(path="/v1/settlements")}) == ("settlement_search", "json", "all")
     assert request_labels({"path": "/territories"}) is None
 
 
 def test_partner_request_metric_uses_only_bounded_labels() -> None:
     async def endpoint(scope, receive, send) -> None:
+        assert DB_SCOPE.get() == "partner"
         scope["route"] = SimpleNamespace(path="/v1/datasets/{dataset}.{fmt}")
         scope["path_params"] = {"dataset": "features", "fmt": "csv"}
         await send({"type": "http.response.start", "status": 200, "headers": []})
@@ -83,7 +90,8 @@ def test_partner_request_metric_uses_only_bounded_labels() -> None:
 
     metric = PARTNER_REQUESTS.labels("features", "csv", "RU-DA", "200")
     before = metric._value.get()
-    asyncio.run(MetricsMiddleware(endpoint)({"type": "http", "path": "/v1/datasets/features.csv", "method": "GET",
+    asyncio.run(MetricsMiddleware(endpoint)({"type": "http", "path": "/api/v1/datasets/features.csv",
+                                              "root_path": "/api", "method": "GET",
                                               "query_string": b"region=RU-DA"}, receive, send))
     assert metric._value.get() == before + 1
     assert DB_SCOPE.get() == "other"
@@ -136,3 +144,27 @@ def test_partner_log_fields_have_no_secret() -> None:
     assert result["dataset"] == "features" and result["requested_region"] == "RU-DA"
     assert result["organisation_id"] == 7 and result["export_rows"] == 100
     assert "pulse_secret" not in json.dumps(result)
+
+
+def test_single_settlement_metric_and_log_keep_id_out_of_metric_labels(caplog) -> None:
+    async def endpoint(scope, receive, send) -> None:
+        scope["route"] = SimpleNamespace(path="/v1/settlements/{territory_id}")
+        scope["state"] = {"partner_operation": "detail", "partner_territory_id": 12345,
+                          "partner_settlement_name": "Тестовое село", "partner_settlement_region": "RU-DA"}
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    async def receive() -> dict:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict) -> None:
+        pass
+
+    metric = SETTLEMENT_REQUESTS.labels("detail", "settlement_detail", "RU-DA", "200")
+    before = metric._value.get()
+    with caplog.at_level(logging.INFO):
+        asyncio.run(MetricsMiddleware(endpoint)({"type": "http", "path": "/v1/settlements/12345", "method": "GET"}, receive, send))
+    assert metric._value.get() == before + 1
+    assert not any("12345" in str(sample.labels) for sample in SETTLEMENT_REQUESTS.collect()[0].samples)
+    assert any(record.__dict__.get("settlement_request") is True and record.__dict__.get("territory_id") == 12345
+               for record in caplog.records)

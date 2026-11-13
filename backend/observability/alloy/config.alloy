@@ -6,6 +6,20 @@ loki.source.file "api" {
     enabled = true
     sync_period = "10s"
   }
+  forward_to = [loki.process.api.receiver]
+}
+
+loki.process "api" {
+  stage.json {
+    expressions = {
+      partner_operation = "partner_operation",
+    }
+  }
+  stage.labels {
+    values = {
+      partner_operation = "partner_operation",
+    }
+  }
   forward_to = [loki.write.local.receiver]
 }
 
