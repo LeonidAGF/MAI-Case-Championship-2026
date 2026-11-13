@@ -1,58 +1,69 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { CompareView } from '@/components/Compare/CompareView';
-import { API, TerritoryBrief } from '@/lib/api';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { CompareView, SERIES } from '@/components/Compare/CompareView';
+import { PageHeader } from '@/components/UI/PageHeader';
+import { Select } from '@/components/UI/Field';
+import { Icon } from '@/components/UI/Icon';
+import { fetchTerritories } from '@/lib/api';
 
 export default function ComparePage() {
-	const [selectedIds, setSelectedIds] = useState<number[]>([]); 
-	const [territories, setTerritories] = useState<TerritoryBrief[]>([]);
-
-	useEffect(() => {
-		fetch(`${API}/territories?level=settlement&scored_only=true&limit=50`)
-			.then(res => res.json())
-			.then(data => setTerritories(data.items || []))
-			.catch(console.error);
-	}, []);
+	const [selectedIds, setSelectedIds] = useState<number[]>([]);
+	const { data } = useQuery({
+		queryKey: ['territories', 'settlement', 'scored', 50],
+		queryFn: () => fetchTerritories({ level: 'settlement', scored_only: true, limit: 50 }),
+	});
+	const territories = data?.items ?? [];
 
 	return (
-		<main className="min-h-screen bg-gray-50 pb-12">
-			<header className="bg-white p-3 md:p-4 shadow-sm mb-4 md:mb-6 flex justify-between items-center sticky top-0 z-10">
-				<h1 className="text-base md:text-xl font-bold text-gray-800 truncate pr-2">Сравнение территорий</h1>
-				<Link href="/" className="text-xs md:text-sm font-medium text-blue-600 hover:underline shrink-0">← Назад</Link>
-			</header>
-		
-			<div className="max-w-6xl mx-auto px-3 md:px-4 space-y-4 md:space-y-6">
-				<div className="bg-white p-3 md:p-4 rounded-xl shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center">
-					<span className="text-sm font-medium text-gray-600">Выберите территории:</span>
-				
-					<div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+		<main className="min-h-dvh bg-mesh pb-16">
+			<PageHeader title="Сравнение территорий" subtitle="Индекс и подиндексы бок о бок" icon="compare" />
+
+			<div className="mx-auto mt-6 max-w-6xl space-y-6 px-3 md:mt-8 md:px-6">
+				<section className="surface rounded-3xl p-4 md:p-6 animate-fade-up">
+					<div className="flex flex-col gap-1 md:flex-row md:items-baseline md:justify-between">
+						<h2 className="font-display text-base font-semibold tracking-tight text-ink-900">Выберите территории</h2>
+						<p className="text-xs font-medium text-ink-500">Две или три из одной группы сравнимости</p>
+					</div>
+
+					<div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
 						{[0, 1, 2].map((slot) => (
-							<select
-								key={slot}
-								value={selectedIds[slot] || ''}
-								onChange={(e) => {
-									const newIds = [...selectedIds];
-									if (e.target.value) newIds[slot] = Number(e.target.value);
-									else newIds.splice(slot, 1);
-									setSelectedIds(newIds);
-								}}
-								className="w-full md:w-auto border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
-							>
-								<option value="">Не выбрано</option>
-								{territories.map(t => (
-									<option key={t.id} value={t.id}>{t.name}</option>
-								))}
-							</select>
+							<div key={slot} className="rounded-2xl bg-white/70 p-3 ring-1 ring-ink-100">
+								<div className="mb-2 flex items-center gap-2 text-xs font-bold text-ink-500">
+									<span className={`h-2.5 w-2.5 rounded-full ${SERIES[slot].dot}`} />
+									Территория {slot + 1}
+									{slot === 2 && <span className="font-medium text-ink-400">· необязательно</span>}
+								</div>
+								<Select
+									aria-label={`Территория ${slot + 1}`}
+									value={selectedIds[slot] || ''}
+									onChange={(e) => {
+										const newIds = [...selectedIds];
+										if (e.target.value) newIds[slot] = Number(e.target.value);
+										else newIds.splice(slot, 1);
+										setSelectedIds(newIds);
+									}}
+								>
+									<option value="">Не выбрано</option>
+									{territories.map((t) => (
+										<option key={t.id} value={t.id}>{t.name}</option>
+									))}
+								</Select>
+							</div>
 						))}
 					</div>
-				</div>
+				</section>
 
 				{selectedIds.length >= 2 ? (
 					<CompareView ids={selectedIds.filter(Boolean)} />
 				) : (
-					<div className="text-center text-gray-500 py-12">Выберите хотя бы две территории в списках выше.</div>
+					<div className="flex flex-col items-center py-14 text-center animate-fade-up">
+						<div className="grid h-16 w-16 place-items-center rounded-3xl bg-brand-gradient text-white shadow-glow animate-float">
+							<Icon name="compare" className="h-8 w-8" />
+						</div>
+						<p className="mt-5 max-w-sm text-sm font-medium text-ink-500">Выберите хотя бы две территории в списках выше.</p>
+					</div>
 				)}
 			</div>
 		</main>

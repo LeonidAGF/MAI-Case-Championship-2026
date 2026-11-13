@@ -1,24 +1,28 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import { ProfileBootstrapper } from "@/components/ProfileBootstrapper";
-import { Providers } from "@/app/providers";
-import "./globals.css";
-
-const inter = Inter({ subsets: ["latin", "cyrillic"] });
+import type { Metadata, Viewport } from 'next';
+// Bundled variable fonts (latin + cyrillic): nothing is loaded from other servers at runtime.
+import '@fontsource-variable/manrope';
+import '@fontsource-variable/unbounded';
+import { ProfileBootstrapper } from '@/components/ProfileBootstrapper';
+import { Providers } from '@/app/providers';
+import './globals.css';
 
 export const metadata: Metadata = {
-	title: "Pulse Score",
-	description: "Индекс транспортной связанности",
+	title: 'Pulse Score',
+	description: 'Индекс транспортной связанности',
+};
+
+export const viewport: Viewport = {
+	themeColor: '#f6f7fb',
 };
 
 export default function RootLayout({
-  	children,
+	children,
 }: Readonly<{
-  	children: React.ReactNode;
+	children: React.ReactNode;
 }>) {
 	return (
 		<html lang="ru">
-			<body className={inter.className}>
+			<body className="font-sans antialiased">
 				<ProfileBootstrapper />
 				<Providers>
 					{children}

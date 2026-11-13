@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_dir: Path | None = None
     metrics_refresh_seconds: int = Field(default=300, ge=15)
-    # Comma-separated list, e.g. "http://localhost:3000,https://atlas-skfo.ru"
-    cors_origins: str = "http://localhost:3000"
+    # Browser origins allowed to call the API (CORS), comma-separated: the public site and `npm run dev`.
+    cors_origins: str = "https://cson.ru,http://localhost:3000"
 
     # --- storage -----------------------------------------------------------
     database_url: str = "postgresql+asyncpg://atlas:atlas@localhost:5432/atlas"

@@ -283,5 +283,5 @@ example and expects affected > 0 and monotonic deltas.
 - The `db/models.py` docstring mentions `tests/integration/test_migrations.py`; the check actually
   lives in `test_api.py::test_migration_matches_models`.
 - The browser can reach the API only from origins listed in `CORS_ORIGINS` (comma-separated, default
-  `http://localhost:3000`): the root `.env` in Docker, `backend/.env` without Docker. The site itself
-  calls `/api` on its own origin and needs no entry.
+  `https://cson.ru,http://localhost:3000`): the root `.env` in Docker, `backend/.env` without Docker. The
+  site itself calls `/api` on its own origin and needs no entry.

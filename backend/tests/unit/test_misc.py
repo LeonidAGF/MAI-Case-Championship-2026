@@ -30,7 +30,7 @@ def test_default_config_and_report_inconsistency() -> None:
 def test_cors_origins_from_env_value() -> None:
     settings = Settings(_env_file=None, cors_origins=" https://atlas.example.com/ ,http://localhost:3000,, ")
     assert settings.cors_origin_list == ["https://atlas.example.com", "http://localhost:3000"]
-    assert Settings(_env_file=None).cors_origin_list == ["http://localhost:3000"]
+    assert Settings(_env_file=None).cors_origin_list == ["https://cson.ru", "http://localhost:3000"]
 
 
 def test_config_rejects_unknown_subindex() -> None:

@@ -1,19 +1,205 @@
 @import "tailwindcss";
 
+/*
+ * Pulse Score design tokens. Both fonts are bundled from npm (@fontsource-variable, imported in
+ * app/layout.tsx), so the site loads no fonts from other servers: Manrope for text and controls,
+ * Unbounded for display text (logo, page titles, big numbers).
+ */
 @theme {
-  --color-background: #ffffff;
-  --color-foreground: #111827;
+	--font-sans: "Manrope Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	--font-display: "Unbounded Variable", "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+
+	/* Ink: text and neutral surfaces, a cool gray with a hint of navy. */
+	--color-ink-50: #f6f7fb;
+	--color-ink-100: #eceef6;
+	--color-ink-200: #dcdfeb;
+	--color-ink-300: #c3c7d9;
+	--color-ink-400: #9399b4;
+	--color-ink-500: #6b7193;
+	--color-ink-600: #505678;
+	--color-ink-700: #3b4163;
+	--color-ink-800: #262b49;
+	--color-ink-900: #171b35;
+	--color-ink-950: #0d1024;
+
+	/* Brand: indigo to violet; the gradient utilities below add a touch of pink. */
+	--color-brand-50: #f3f2ff;
+	--color-brand-100: #e8e5ff;
+	--color-brand-200: #d3ccff;
+	--color-brand-300: #b3a6ff;
+	--color-brand-400: #9480ff;
+	--color-brand-500: #775cf8;
+	--color-brand-600: #6445ec;
+	--color-brand-700: #5436cc;
+	--color-brand-800: #452fa5;
+	--color-brand-900: #3a2b83;
+
+	--color-background: #f6f7fb;
+	--color-foreground: #171b35;
+
+	--shadow-soft: 0 1px 2px rgb(23 27 53 / 0.04), 0 4px 14px -4px rgb(23 27 53 / 0.08), 0 14px 36px -12px rgb(23 27 53 / 0.12);
+	--shadow-float: 0 2px 6px rgb(23 27 53 / 0.05), 0 14px 32px -8px rgb(23 27 53 / 0.16), 0 36px 72px -24px rgb(84 54 204 / 0.22);
+	--shadow-glow: 0 8px 22px -6px rgb(119 92 248 / 0.6), 0 3px 8px -2px rgb(224 87 180 / 0.3);
+
+	--ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+
+	--animate-fade-up: fade-up 0.6s var(--ease-spring) both;
+	--animate-fade-in: fade-in 0.3s ease-out both;
+	--animate-scale-in: scale-in 0.45s var(--ease-spring) both;
+	--animate-sheet-up: sheet-up 0.5s var(--ease-spring) both;
+	--animate-shimmer: shimmer 1.4s linear infinite;
+	--animate-float: float 5s ease-in-out infinite;
+	--animate-pulse-ring: pulse-ring 2s var(--ease-spring) infinite;
+	--animate-typing: typing 1.2s ease-in-out infinite;
+
+	@keyframes fade-up {
+		from { opacity: 0; transform: translateY(12px); }
+		to { opacity: 1; transform: none; }
+	}
+	@keyframes fade-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+	@keyframes scale-in {
+		from { opacity: 0; transform: translateY(8px) scale(0.97); }
+		to { opacity: 1; transform: none; }
+	}
+	@keyframes sheet-up {
+		from { opacity: 0; transform: translateY(32px); }
+		to { opacity: 1; transform: none; }
+	}
+	@keyframes shimmer {
+		from { background-position: 200% 0; }
+		to { background-position: -200% 0; }
+	}
+	@keyframes float {
+		0%, 100% { transform: translateY(0); }
+		50% { transform: translateY(-4px); }
+	}
+	@keyframes pulse-ring {
+		0% { transform: scale(0.6); opacity: 0.8; }
+		100% { transform: scale(2.8); opacity: 0; }
+	}
+	@keyframes typing {
+		0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+		40% { transform: translateY(-4px); opacity: 1; }
+	}
 }
 
-body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
+/* Frosted panel floating over the map. */
+@utility glass {
+	background-color: rgb(255 255 255 / 0.7);
+	-webkit-backdrop-filter: blur(20px) saturate(180%);
+	backdrop-filter: blur(20px) saturate(180%);
+	border: 1px solid rgb(255 255 255 / 0.72);
+	box-shadow: var(--shadow-float), inset 0 1px 0 rgb(255 255 255 / 0.65);
+}
+
+/* The same, more opaque: long text, forms, drawers. */
+@utility glass-strong {
+	background-color: rgb(255 255 255 / 0.9);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	backdrop-filter: blur(24px) saturate(180%);
+	border: 1px solid rgb(255 255 255 / 0.9);
+	box-shadow: var(--shadow-float), inset 0 1px 0 rgb(255 255 255 / 0.8);
+}
+
+/* Card on the pages without a map. */
+@utility surface {
+	background-color: rgb(255 255 255 / 0.82);
+	-webkit-backdrop-filter: blur(14px);
+	backdrop-filter: blur(14px);
+	border: 1px solid rgb(255 255 255 / 0.9);
+	box-shadow: var(--shadow-soft);
+}
+
+@utility bg-brand-gradient {
+	background-image: linear-gradient(135deg, #5b63f6 0%, #8a5cf6 52%, #e057b4 100%);
+}
+
+@utility text-brand-gradient {
+	background-image: linear-gradient(120deg, #4f46e5 0%, #8a5cf6 55%, #d9468f 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+}
+
+/* Soft multicolour backdrop of the pages without a map. */
+@utility bg-mesh {
+	background-color: var(--color-ink-50);
+	background-image:
+		radial-gradient(at 8% 4%, rgb(148 128 255 / 0.24) 0, transparent 44%),
+		radial-gradient(at 92% 2%, rgb(224 87 180 / 0.14) 0, transparent 40%),
+		radial-gradient(at 78% 96%, rgb(56 189 248 / 0.16) 0, transparent 46%),
+		radial-gradient(at 0% 92%, rgb(251 191 36 / 0.12) 0, transparent 42%);
+	background-attachment: fixed;
+}
+
+@utility scrollbar-soft {
+	scrollbar-width: thin;
+	scrollbar-color: rgb(147 153 180 / 0.45) transparent;
+}
+
+/* Placeholder while data loads. */
+@utility skeleton {
+	background-image: linear-gradient(90deg, var(--color-ink-100) 0%, var(--color-ink-50) 50%, var(--color-ink-100) 100%);
+	background-size: 200% 100%;
+	animation: var(--animate-shimmer);
+}
+
+@layer base {
+	html {
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		text-rendering: optimizeLegibility;
+	}
+	body {
+		background-color: var(--color-background);
+		color: var(--color-foreground);
+		font-family: var(--font-sans);
+	}
+	::selection {
+		background-color: rgb(119 92 248 / 0.22);
+	}
+	button:not(:disabled),
+	[role="button"]:not(:disabled) {
+		cursor: pointer;
+	}
+	:focus-visible {
+		outline: 2px solid var(--color-brand-400);
+		outline-offset: 2px;
+	}
 }
 
 .scrollbar-hide::-webkit-scrollbar {
-    display: none;
+	display: none;
 }
 .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+
+/* MapLibre controls in the same style (the selectors outrank maplibre-gl.css, which loads later). */
+.maplibregl-map {
+	font-family: var(--font-sans);
+}
+.maplibregl-map .maplibregl-ctrl-attrib {
+	border-radius: 9999px;
+	background-color: rgb(255 255 255 / 0.72);
+	-webkit-backdrop-filter: blur(10px);
+	backdrop-filter: blur(10px);
+	color: var(--color-ink-500);
+	font-size: 10px;
+}
+.maplibregl-map .maplibregl-ctrl-attrib a {
+	color: var(--color-ink-500);
+}
+.maplibregl-map .maplibregl-ctrl-group {
+	overflow: hidden;
+	border: 1px solid rgb(255 255 255 / 0.8);
+	border-radius: 14px;
+	background-color: rgb(255 255 255 / 0.82);
+	-webkit-backdrop-filter: blur(14px);
+	backdrop-filter: blur(14px);
+	box-shadow: var(--shadow-float);
 }

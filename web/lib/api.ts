@@ -3,10 +3,17 @@ import { encodeProfile } from './profile';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'https://cson.site';
 
+/** One validation problem of a 422 answer (FastAPI): where it is and what is wrong. */
+export interface ApiErrorDetail {
+	loc?: (string | number)[];
+	msg?: string;
+	type?: string;
+}
+
 export class ApiError extends Error {
 	code?: string;
-	details?: any[];
-	constructor(message: string, code?: string, details?: any[]) {
+	details?: ApiErrorDetail[];
+	constructor(message: string, code?: string, details?: ApiErrorDetail[]) {
 		super(message);
 		this.name = 'ApiError';
 		this.code = code;
@@ -69,7 +76,7 @@ export interface ClusterStats {
 }
 
 export interface IndexSingle {
-	profile: any;
+	profile: unknown;
 	model_version: string;
 	data_revision: number;
 	scenario_run_id: number | null;
@@ -86,7 +93,7 @@ export interface IndexSingle {
 }
 
 export interface IndexCluster {
-	profile: any;
+	profile: unknown;
 	model_version: string;
 	data_revision: number;
 	scenario_run_id: number | null;
@@ -137,9 +144,20 @@ export interface ExplainResponse {
 	waterfall: WaterfallStep[];
 	pluses: ProCon[];
 	minuses: ProCon[];
-	attractiveness_factors: any[];
+	attractiveness_factors: unknown[];
 	summary: string;
 	result_id: number;
+}
+
+export interface RadarAxis {
+	code: string;
+	name: string;
+}
+
+export interface RadarSeries {
+	territory_id: number;
+	name: string;
+	values: (number | null)[];
 }
 
 export interface CompareResponse {
@@ -147,9 +165,19 @@ export interface CompareResponse {
 	cluster_name: string;
 	cluster_stats: ClusterStats;
 	items: IndexItem[];
-	radar: any;
-	leaders: any;
+	radar: { axes: RadarAxis[]; series: RadarSeries[] };
+	leaders: Record<string, { territory_id: number; gap: number }>;
 	summary: string[];
+}
+
+export interface WhatIfChange {
+	feature_code: string;
+	label: string;
+	unit: string;
+	before: number;
+	after: number;
+	delta_points: number;
+	text: string;
 }
 
 export interface WhatIfResult {
@@ -161,7 +189,7 @@ export interface WhatIfResult {
 	total_after: number;
 	delta: number;
 	delta_subindices: Record<string, number>;
-	changes: any[];
+	changes: WhatIfChange[];
 }
 
 export interface ScenarioKind {
@@ -169,14 +197,26 @@ export interface ScenarioKind {
 	label: string;
 }
 
+/** JSON Schema of one scenario parameter (pydantic): optional ones come as anyOf [type, null]. */
+export interface ParamSchema {
+	type?: string;
+	anyOf?: ParamSchema[];
+	description?: string;
+	minimum?: number;
+	maximum?: number;
+	default?: unknown;
+}
+
+export type ScenarioParams = Record<string, unknown>;
+
 export interface ScenarioInfo {
 	code: string;
 	name: string;
 	description: string;
 	target: 'point' | 'municipality';
 	kinds: ScenarioKind[] | null;
-	params_schema: any;
-	example: Record<string, any>;
+	params_schema: { properties?: Record<string, ParamSchema>; required?: string[] } | null;
+	example: ScenarioParams;
 }
 
 export interface WhatIfBrief {
@@ -190,24 +230,22 @@ export interface WhatIfResponse {
 	scenario_code: string;
 	scenario_name: string;
 	method_used: string;
-	params: any;
-	plan: { scenario_code: string, params: any, reason: string }[] | null;
+	params: ScenarioParams;
+	plan: { scenario_code: string; params: ScenarioParams; reason: string }[] | null;
 	affected: number;
-	results: {
-		territory_id: number;
-		name: string;
-		total_before: number;
-		total_after: number;
-		delta: number;
-		delta_subindices: Record<string, number>;
-		changes: { feature_code: string, label: string, unit: string, before: number, after: number, delta_points: number, text: string }[];
-	}[];
+	results: WhatIfResult[];
 	winners: WhatIfBrief[];
 	losers: WhatIfBrief[];
-	summary: any;
+	summary: {
+		affected: number;
+		avg_delta: number;
+		max_delta: number;
+		min_delta: number;
+		by_cluster?: Record<string, { affected: number; avg_delta: number }>;
+	} | null;
 	explanation: string;
 	warnings: string[];
-	profile: any;
+	profile: unknown;
 }
 
 export type Season = 'winter' | 'spring' | 'summer' | 'autumn';
@@ -228,12 +266,24 @@ export interface ClimateCell {
 	grid_lat: number;
 }
 
+/** Editorial seasonal target of the climate map (not a climate normal): backend app/climate/service.py. */
+export interface ClimateTarget {
+	temperature_min_c: number;
+	temperature_max_c: number;
+	humidity_min_pct: number;
+	humidity_max_pct: number;
+	yellow_temperature_margin_c: number;
+	yellow_humidity_margin_pct: number;
+	kind: string;
+}
+
 export interface ClimateGridResponse {
 	year: number;
 	period_label: string;
 	source: string;
 	time_standard: string;
-	target: any;
+	grid_resolution_degrees?: { latitude: number; longitude: number };
+	target: ClimateTarget;
 	cells: ClimateCell[];
 }
 
@@ -253,9 +303,46 @@ export interface ClimateRegionsResponse {
 	period_label: string;
 	source: string;
 	time_standard: string;
-	target: any;
+	target: ClimateTarget;
 	regions: ClimateRegion[];
 }
+
+// GeoJSON of /territories/geojson. Type aliases, not interfaces, so they also fit MapLibre's GeoJSON types.
+export type PointGeometry = { type: 'Point'; coordinates: [number, number] };
+export type PolygonGeometry = { type: 'Polygon'; coordinates: number[][][] };
+export type MultiPolygonGeometry = { type: 'MultiPolygon'; coordinates: number[][][][] };
+
+export type SettlementProperties = {
+	id: number;
+	name: string;
+	level: string;
+	kind: string;
+	region_code: string | null;
+	parent_id: number | null;
+	cluster: string | null;
+	population: number | null;
+	is_scored: boolean;
+	total?: number | null;
+	rank?: number | null;
+};
+
+export type SettlementFeature = { type: 'Feature'; id?: number; geometry: PointGeometry; properties: SettlementProperties };
+export type SettlementCollection = { type: 'FeatureCollection'; features: SettlementFeature[] };
+
+export type RegionProperties = {
+	id: number;
+	name: string;
+	region_code: string | null;
+	population: number | null;
+};
+
+export type RegionFeature = {
+	type: 'Feature';
+	id?: number;
+	geometry: PolygonGeometry | MultiPolygonGeometry;
+	properties: RegionProperties;
+};
+export type RegionCollection = { type: 'FeatureCollection'; features: RegionFeature[] };
 
 export async function fetchIndex(territoryId: number, p: Profile) {
 	const q = new URLSearchParams({ territory_id: String(territoryId), p: encodeProfile(p) });
@@ -294,16 +381,23 @@ export async function fetchTerritoriesGeoJSON() {
 	return res.json();
 }
 
+/** Settlements as points, each with its index for the profile (`total`, null when it isn't scored). */
+export async function fetchSettlementsGeoJSON(p: Profile) {
+	const q = new URLSearchParams({ level: 'settlement', with_index: 'true', p: encodeProfile(p) });
+	return json<SettlementCollection>(await fetch(`${API}/territories/geojson?${q}`));
+}
+
 export async function fetchScenarios() {
   	return json<ScenarioInfo[]>(await fetch(`${API}/whatif/scenarios`));
 }
 
-export async function fetchTerritories(params: { level?: string; q?: string; limit?: number; parent_id?: number }) {
+export async function fetchTerritories(params: { level?: string; q?: string; limit?: number; parent_id?: number; scored_only?: boolean }) {
 	const q = new URLSearchParams();
 	if (params.level) q.append('level', params.level);
 	if (params.q) q.append('q', params.q);
 	if (params.limit) q.append('limit', String(params.limit));
 	if (params.parent_id) q.append('parent_id', String(params.parent_id));
+	if (params.scored_only) q.append('scored_only', 'true');
 	
 	return json<{ items: TerritoryBrief[] }>(await fetch(`${API}/territories?${q}`));
 }
@@ -362,5 +456,5 @@ export async function fetchClimateRegions(season: Season) {
 }
 
 export async function fetchRegionBoundaries() {
-  	return json<any>(await fetch(`${API}/territories/geojson?level=region&simplify=0.01`));
+	return json<RegionCollection>(await fetch(`${API}/territories/geojson?level=region&simplify=0.01`));
 }

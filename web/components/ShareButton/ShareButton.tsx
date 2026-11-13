@@ -1,31 +1,53 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { useAtlas } from '@/lib/store';
 import { encodeProfile } from '@/lib/profile';
+import { Icon } from '@/components/UI/Icon';
 
 export function ShareButton() {
 	const profile = useAtlas((s) => s.profile);
+	const [toast, setToast] = useState<{ ok: boolean } | null>(null);
+	const timer = useRef<number | undefined>(undefined);
+
+	useEffect(() => () => window.clearTimeout(timer.current), []);
 
 	const onClick = async () => {
+		let ok = true;
 		try {
 			const url = new URL(window.location.href);
 			url.searchParams.set('p', encodeProfile(profile));
 			await navigator.clipboard.writeText(url.toString());
-			alert('Ссылка скопирована!');
 		} catch {
-			alert('Не удалось скопировать ссылку');
+			ok = false;
 		}
+		setToast({ ok });
+		window.clearTimeout(timer.current);
+		timer.current = window.setTimeout(() => setToast(null), 2600);
 	};
 
 	return (
-		<button
-			onClick={onClick}
-			className="fixed bottom-[5.5rem] right-6 w-14 h-14 bg-emerald-600 text-white rounded-full shadow-xl hover:bg-emerald-700 transition flex items-center justify-center z-40"
-			title="Поделиться ссылкой"
-		>
-			<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-			</svg>
-		</button>
+		<>
+			<button
+				onClick={onClick}
+				title="Поделиться ссылкой"
+				aria-label="Скопировать ссылку с этим профилем"
+				className="glass fixed bottom-[5.75rem] right-6 z-40 grid h-14 w-14 place-items-center rounded-2xl text-brand-600 transition-all duration-300 ease-spring hover:-translate-y-0.5 hover:text-brand-700 active:scale-95"
+			>
+				<Icon name="share" className="h-6 w-6" />
+			</button>
+
+			{toast && (
+				<div
+					role="status"
+					className="glass-strong fixed bottom-[6.1rem] right-24 z-40 flex items-center gap-2.5 rounded-2xl py-2.5 pl-3 pr-4 text-sm font-bold text-ink-800 animate-scale-in"
+				>
+					<span className={`grid h-6 w-6 place-items-center rounded-full text-white ${toast.ok ? 'bg-emerald-500' : 'bg-rose-500'}`}>
+						<Icon name={toast.ok ? 'check' : 'x'} className="h-3.5 w-3.5" strokeWidth={3} />
+					</span>
+					{toast.ok ? 'Ссылка скопирована!' : 'Не удалось скопировать ссылку'}
+				</div>
+			)}
+		</>
 	);
 }

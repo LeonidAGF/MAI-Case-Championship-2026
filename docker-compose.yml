@@ -77,7 +77,7 @@ services:
       TRUST_FORWARDED_FOR: "true"
       API_PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/api
       # Browser origins allowed to call the API from another address (comma-separated), from the root .env.
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://cson.ru,http://localhost:3000}
       # http://vpn-egress:8888 together with COMPOSE_PROFILES=vpn: the chat goes through the VPN tunnel.
       LLM_PROXY_URL: ${LLM_PROXY_URL:-}
     volumes:
