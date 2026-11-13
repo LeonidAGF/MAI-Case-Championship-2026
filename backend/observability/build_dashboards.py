@@ -51,6 +51,8 @@ def panel(
         }
     elif kind == "logs":
         options = {"showTime": True, "showLabels": False, "showCommonLabels": False, "wrapLogMessage": True, "enableLogDetails": True}
+    elif kind == "table":
+        options = {"showHeader": True, "cellHeight": "sm"}
     else:
         options = {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}}
     return {
@@ -60,7 +62,8 @@ def panel(
         "type": kind,
         "datasource": datasource,
         "gridPos": {"x": x, "y": y, "w": w, "h": h},
-        "targets": [{"refId": "A", "expr": expression, "datasource": datasource, "instant": instant}],
+        "targets": [{"refId": "A", "expr": expression, "datasource": datasource, "instant": instant,
+                     **({"queryType": "instant"} if datasource == LOKI and instant else {})}],
         "fieldConfig": field_config,
         "options": options,
     }
@@ -184,7 +187,7 @@ partners = dashboard(
         panel(6, "Лимит 429 с запуска", "sum(atlas_partner_api_requests_total{status=\"429\",dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}) or vector(0)", "stat", 20, 0, 4, 4, decimals=0, thresholds=[(None, "green"), (1, "yellow")], description="Число запросов, отклонённых лимитом ключа с запуска API."),
         panel(7, "Успешные выгрузки по наборам", "60 * sum by (dataset) (rate(atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m]))", "timeseries", 0, 4, 12, 8, unit="reqpm", description="Текущий спрос на каждый набор данных."),
         panel(8, "Ответы /v1 по статусу", "60 * sum by (status) (rate(atlas_partner_api_requests_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m]))", "timeseries", 12, 4, 12, 8, unit="reqpm", description="2xx, 4xx, 5xx и 429; ошибки авторизации также входят в статистику."),
-        panel(9, "Запрошенные субъекты с запуска", "sum by (region) (atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\",region=~\"RU-.*\"})", "bargauge", 0, 12, 8, 10, decimals=0, description="Успешные выгрузки с явным параметром region с запуска API. Запросы всего округа и только по району не включены."),
+        panel(9, "Запрошенные субъекты с запуска", "sum by (region) (atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\",region=~\"RU-.*\"})", "bargauge", 0, 12, 8, 10, decimals=0, description="Успешные выгрузки с явным параметром region или конкретным territory_id. Запросы всего округа и только по району не включены."),
         panel(10, "Наборы с запуска", "sum by (dataset) (atlas_partner_exports_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"})", "bargauge", 8, 12, 8, 10, decimals=0, description="Сколько раз успешно выгружали каждый набор с запуска API."),
         panel(11, "Данные по наборам с запуска", "sum by (dataset) (atlas_partner_export_bytes_total{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"})", "bargauge", 16, 12, 8, 10, unit="bytes", description="Объём до сжатия с запуска API; показывает самые тяжёлые наборы."),
         panel(12, "p95 формирования по наборам", "histogram_quantile(0.95, sum by (le, dataset) (rate(atlas_partner_export_generation_duration_seconds_bucket{dataset=~\"$dataset\",format=~\"$format\",region=~\"$region\"}[5m])))", "timeseries", 0, 22, 12, 8, unit="s", description="Время работы backend над успешной выгрузкой; не включает авторизацию и пересылку ответа."),
@@ -198,6 +201,13 @@ partners = dashboard(
         panel(20, "p95 SQL по источнику", "histogram_quantile(0.95, sum by (le, scope) (rate(atlas_db_statement_duration_seconds_bucket[5m])))", "timeseries", 12, 34, 12, 8, unit="s", description="Время выполнения одного SQL-выражения для /v1 и остальной работы API."),
         panel(21, "Журнал обращений организаций", "{job=\"atlas\",service=\"api\"} | json | message=\"http_request\" | dataset!=\"\" | dataset=~\"$dataset\" | export_format=~\"$format\" | requested_region=~\"$region\"", "logs", 0, 42, 12, 12, datasource=LOKI, description="Структурированный журнал: набор, регион фильтра, статус, длительность, id организации и ключа, строки и байты. Секретный ключ и почта не пишутся."),
         panel(22, "Ошибки корпоративного API", "{job=\"atlas\",service=\"api\"} | json | message=\"http_request\" | dataset!=\"\" | status=~\"4..|5..\"", "logs", 12, 42, 12, 12, datasource=LOKI, description="Ошибки 4xx/5xx; поле key_id есть только после успешного распознавания ключа."),
+        panel(23, "Поиски НП с запуска", "sum(atlas_partner_settlement_requests_total{operation=\"search\",status=\"200\"}) or vector(0)", "stat", 0, 54, 6, 4, decimals=0, description="Успешные поиски по названию с запуска API. Один поиск может вернуть несколько пунктов."),
+        panel(24, "Карточки НП с запуска", "sum(atlas_partner_settlement_requests_total{operation=\"detail\",status=\"200\"}) or vector(0)", "stat", 6, 54, 6, 4, decimals=0, description="Успешные обращения к /v1/settlements/{territory_id} с запуска API."),
+        panel(25, "Выгрузки одного НП", "sum(atlas_partner_settlement_requests_total{operation=\"export\",status=\"200\"}) or vector(0)", "stat", 12, 54, 6, 4, decimals=0, description="Успешные CSV/JSON выгрузки с явным territory_id с запуска API."),
+        panel(26, "Поиски без результата", "sum(atlas_partner_settlement_search_empty_total) or vector(0)", "stat", 18, 54, 6, 4, decimals=0, description="Поиски по названию, которые вернули ноль пунктов с запуска API."),
+        panel(27, "Какие населённые пункты запрашивали чаще", "topk(20, sum by (territory_id, settlement_name, settlement_region) (count_over_time({job=\"atlas\",service=\"api\",partner_operation=~\"detail|export\"} | json | settlement_request=\"true\" | __error__=\"\" [$__range])))", "table", 0, 58, 24, 12, datasource=LOKI, instant=True, unit="none", decimals=0, description="Топ 20 за выбранный период: только успешные явные запросы карточки или выгрузки одного пункта. Массовая выгрузка района или субъекта не приписывается каждому селу."),
+        panel(28, "Точечный спрос по субъектам", "sum by (region) (atlas_partner_settlement_requests_total{operation=~\"detail|export\",status=\"200\",region=~\"RU-.*\"})", "bargauge", 0, 70, 12, 8, decimals=0, description="Число успешных обращений к конкретным пунктам по субъектам с запуска API; ID пунктов не добавляются в метки Prometheus."),
+        panel(29, "Операции с населёнными пунктами / мин", "60 * sum by (operation, status) (rate(atlas_partner_settlement_requests_total[5m]))", "timeseries", 12, 70, 12, 8, unit="reqpm", description="Поиск, карточка и выгрузка одного пункта по статусам за последние пять минут."),
     ],
     [
         query_variable("dataset", "Набор", "label_values(atlas_partner_api_requests_total, dataset)"),
@@ -205,6 +215,16 @@ partners = dashboard(
         query_variable("region", "Фильтр региона", "label_values(atlas_partner_api_requests_total, region)"),
     ],
 )
+
+next(panel for panel in partners["panels"] if panel["id"] == 27)["transformations"] = [
+    {"id": "labelsToFields", "options": {"mode": "columns", "keepLabels": ["territory_id", "settlement_name", "settlement_region"]}},
+    {"id": "organize", "options": {
+        "excludeByName": {"Time": True},
+        "indexByName": {"settlement_name": 0, "settlement_region": 1, "territory_id": 2, "Value #A": 3},
+        "renameByName": {"settlement_name": "Населённый пункт", "settlement_region": "Субъект",
+                         "territory_id": "ID", "Value #A": "Запросов"},
+    }},
+]
 
 
 def main() -> None:

@@ -47,3 +47,10 @@ groups:
           severity: info
         annotations:
           summary: За 10 минут API организаций не менее 10 раз отклонил запрос по лимиту ключа
+      - alert: AtlasPartnerSettlementLookupFailures
+        expr: sum(increase(atlas_partner_settlement_requests_total{operation="detail",status="404"}[10m])) >= 10
+        for: 2m
+        labels:
+          severity: info
+        annotations:
+          summary: За 10 минут организации не менее 10 раз запросили несуществующий населённый пункт
