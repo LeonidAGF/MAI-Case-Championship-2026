@@ -13,8 +13,8 @@ classification and the free connectivity check (``python -m app.cli chat-check``
 * Credentials: ``ANTHROPIC_API_KEY`` from the environment or ``backend/.env`` (``Settings``);
   without it the chat reports ``chat_unavailable`` and the rest of the API keeps working.
 * Egress: with ``LLM_PROXY_URL`` this client, and nothing else in the app, connects through that HTTP
-  proxy: the AmneziaWG sidecar (the ``vpn`` profile of ``docker-compose.yml``). ``python -m app.cli egress-check``
-  shows the public IP and country both ways.
+  proxy: the AmneziaWG or Xray sidecar (the ``vpn`` or ``xray`` profile of ``docker-compose.yml``).
+  ``python -m app.cli egress-check`` shows the public IP and country both ways.
 """
 
 from __future__ import annotations

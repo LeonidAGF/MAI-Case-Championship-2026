@@ -1,3 +1,4 @@
 graph/edges.parquet filter=lfs diff=lfs merge=lfs -text
-# The VPN sidecar runs on Linux: keep LF in its script and configs on Windows checkouts too (core.autocrlf).
+# The VPN sidecars run on Linux: keep LF in their scripts and configs on Windows checkouts too (core.autocrlf).
 backend/docker/vpn-egress/** text eol=lf
+backend/docker/xray-egress/** text eol=lf
