@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { useQuery } from '@tanstack/react-query';
 import { useAtlas } from '@/lib/store';
 import { API } from '@/lib/api';
 import { encodeProfile } from '@/lib/profile';
@@ -19,6 +20,16 @@ export function AtlasMap() {
 	
 	const selectTerritory = useAtlas((s) => s.selectTerritory);
 	const profile = useAtlas((s) => s.profile);
+
+	const { data: geojson, isLoading } = useQuery({
+		queryKey: ['geojson', encodeProfile(profile)],
+		queryFn: async () => {
+			const q = new URLSearchParams({ level: 'settlement', with_index: 'true', p: encodeProfile(profile) });
+			const res = await fetch(`${API}/territories/geojson?${q}`);
+			if (!res.ok) throw new Error('Failed to load GeoJSON');
+			return res.json();
+		},
+	});
 
 	useEffect(() => {
 		if (map.current || !mapContainer.current) return;
@@ -56,49 +67,52 @@ export function AtlasMap() {
 		map.current.on('mouseenter', 'settlements-circle', () => { if (map.current) map.current.getCanvas().style.cursor = 'pointer'; });
 		map.current.on('mouseleave', 'settlements-circle', () => { if (map.current) map.current.getCanvas().style.cursor = ''; });
 
-		return () => { map.current?.remove(); map.current = null; };
+		return () => { 
+			map.current?.remove(); 
+			map.current = null; 
+		};
 	}, [selectTerritory]);
 
 	useEffect(() => {
 		const mapCur = map.current;
-		if (!mapCur || !profile || !profile.weights) return;
-		
-		let cancelled = false;
+		if (!mapCur || !geojson) return;
 
-		(async () => {
-			try {
-				const q = new URLSearchParams({ level: 'settlement', with_index: 'true', p: encodeProfile(profile) });
-				const res = await fetch(`${API}/territories/geojson?${q}`);
-				if (!res.ok) throw new Error('Failed to load GeoJSON');
-				const geojson = await res.json();
-				
-				if (cancelled || !mapCur) return;
+		const updateMap = () => {
+			if (!mapCur.getSource('settlements')) return;
 
-				if (mapCur.getSource('settlements')) {
-					(mapCur.getSource('settlements') as maplibregl.GeoJSONSource).setData(geojson);
+			(mapCur.getSource('settlements') as maplibregl.GeoJSONSource).setData(geojson);
+
+			const matchExpr: any = ['match', ['get', 'id']];
+			geojson.features.forEach((f: any) => {
+				const total = f.properties.total;
+				if (total != null) {
+					matchExpr.push(f.properties.id, colorFor(total));
 				}
+			});
+			matchExpr.push('#eeeeee');
 
-				const matchExpr: any = ['match', ['get', 'id']];
-				geojson.features.forEach((f: any) => {
-					const total = f.properties.total;
-					if (total != null) {
-						matchExpr.push(f.properties.id, colorFor(total));
-					}
-				});
-				matchExpr.push('#eeeeee');
-
-				if (mapCur.getLayer('settlements-circle')) {
-					mapCur.setPaintProperty('settlements-circle', 'circle-color', matchExpr);
-				}
-			} catch (e) {
-				console.error("Ошибка при загрузке точек:", e);
+			if (mapCur.getLayer('settlements-circle')) {
+				mapCur.setPaintProperty('settlements-circle', 'circle-color', matchExpr);
 			}
-		})();
+		};
 
-		return () => { cancelled = true; };
-	}, [profile]);
+		if (mapCur.loaded()) {
+			updateMap();
+		} else {
+			mapCur.once('load', updateMap);
+		}
+	}, [geojson]);
 
-	return <div ref={mapContainer} className="absolute inset-0 w-full h-full" />;
+	return (
+		<div className="absolute inset-0 w-full h-full">
+			<div ref={mapContainer} className="w-full h-full" />
+			{isLoading && (
+				<div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10">
+					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+				</div>
+			)}
+		</div>
+	);
 }
 
 function colorFor(score: number): string {
