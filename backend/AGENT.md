@@ -25,6 +25,8 @@ Run `docker compose` from the repository root (one `docker-compose.yml` for the 
 | Task | Command |
 |---|---|
 | Whole app: Caddy, web, api, db, redis, monitoring (the root `.env` holds the site login, passwords, ports) | `docker compose up -d --build` |
+| Publish the four images to Docker Hub (on a PC or in CI, never on the server) | `docker login -u kekishev`, then `docker compose --profile vpn build` and `docker compose --profile vpn push` |
+| Run on the server from Docker Hub images | `docker compose pull`, then `docker compose up -d --no-build` |
 | Reference tables, territories, OSM objects and features, chat knowledge (idempotent) | `docker compose run --rm api python -m app.cli seed` |
 | Only the OSM objects and features (removes leftover synthetic values) | `docker compose run --rm api python -m app.cli seed-osm` |
 | Ambulance travel times to all settlements (after `seed`; ~20 s, peak ~2.5 GB RAM) | `docker compose run --rm api python -m app.cli load-ambulance` |

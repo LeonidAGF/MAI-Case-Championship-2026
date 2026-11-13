@@ -102,7 +102,7 @@ docker compose run --rm api python -m app.cli load-ambulance   # время до
 
 Что делают команды:
 
-- `up` собирает образы и запускает Caddy (вход на сайт по логину, HTTPS для домена), фронтенд, API, PostgreSQL 16 (с PostGIS и pgvector), Redis и мониторинг. При старте API сам применяет миграции базы. Вместо сборки можно взять готовые образы из CI: `docker compose pull api web`, затем `docker compose up -d`.
+- `up` собирает образы и запускает Caddy (вход на сайт по логину, HTTPS для домена), фронтенд, API, PostgreSQL 16 (с PostGIS и pgvector), Redis и мониторинг. При старте API сам применяет миграции базы. Вместо сборки можно взять готовые образы из Docker Hub: `docker compose pull`, затем `docker compose up -d --no-build`.
 - `seed` загружает справочники, 7 субъектов, 144 района и 3 403 населённых пункта, объекты и признаки из OpenStreetMap (`geo-embeddings/data/osm_poi.csv` и `osm_features.csv`) и базу знаний чата. Синтетические значения, оставшиеся от старых версий, удаляются. Команду можно запускать повторно, дубликатов не будет.
 - `load-ambulance` считает время доезда скорой до каждого населённого пункта по дорожному графу ML (`graph/`, Git LFS) и рельефу SRTM, плитки которого лежат в `backend/data/srtm`. Подробности — в разделе «Время доезда скорой помощи» файла [backend/README.md](backend/README.md).
 
@@ -349,17 +349,31 @@ TEST_DATABASE_URL=postgresql+asyncpg://atlas:atlas@localhost:5432/atlas_test
 
 ## Развёртывание на сервере и CI/CD
 
-На сервере нужны Docker Engine с Compose v2 и Git LFS (дорожный граф для `load-ambulance`).
+На сервере ничего не собирается: все четыре образа (`kekishev/case-championship-backend`, `-frontend`, `-db`, `-vpn-egress`) собираются на вашем компьютере или в CI и публикуются в Docker Hub, а сервер их только скачивает.
+
+**1. Собрать и опубликовать образы** (на своём компьютере, из корня репозитория, с запущенным Docker Desktop):
+
+```bash
+docker login -u kekishev                  # пароль — токен доступа Docker Hub с правами Read & Write
+docker compose --profile vpn build        # бэкенд, фронтенд, база и VPN-контейнер
+docker compose --profile vpn push         # в Docker Hub с тегом latest
+```
+
+Чтобы опубликовать ещё и версию с тегом коммита, повторите `build` и `push` с `IMAGE_TAG=<тег>` (PowerShell: `$env:IMAGE_TAG = git rev-parse --short HEAD`); сборка возьмёт слои из кеша.
+
+**2. Запустить на сервере.** Нужны Docker Engine с Compose v2 и Git LFS (дорожный граф для `load-ambulance`):
 
 ```bash
 git clone <адрес репозитория> atlas && cd atlas && git lfs pull
 cp .env.example .env                   # SITE_ADDRESS, PUBLIC_URL, BASIC_AUTH_*, POSTGRES_PASSWORD, GRAFANA_ADMIN_PASSWORD
 cp backend/.env.example backend/.env   # ANTHROPIC_API_KEY и другие настройки API
-docker compose pull api web            # образы из Docker Hub; без CI: docker compose up -d --build
-docker compose up -d
+docker compose pull                    # образы из Docker Hub
+docker compose up -d --no-build        # --no-build: если образа нет, ошибка вместо сборки на сервере
 docker compose run --rm api python -m app.cli seed
 docker compose run --rm api python -m app.cli load-ambulance
 ```
+
+Обновление: опубликуйте новые образы, затем на сервере `git pull && docker compose pull && docker compose up -d --no-build`.
 
 - Снаружи открыты только порты 80 и 443 (Caddy). Если в `SITE_ADDRESS` указан домен, направленный на сервер, Caddy сам получит сертификат Let's Encrypt. С `SITE_ADDRESS=:80` сайт работает по HTTP, и пароль передаётся без шифрования.
 - Сайт и API закрыты одним логином (`BASIC_AUTH_USER`, `BASIC_AUTH_HASH`). Без него Caddy не запускается, поэтому сайт не окажется открытым по ошибке.
@@ -370,11 +384,11 @@ docker compose run --rm api python -m app.cli load-ambulance
 
 | Событие | Что происходит |
 |---|---|
-| pull request | unit- и интеграционные тесты бэкенда, сборка обоих образов без публикации |
-| push в `main` | то же, затем публикация образов `kekishev/case-championship-backend` и `kekishev/case-championship-frontend` в Docker Hub с тегами `latest`, `main` и `sha-<коммит>`, затем деплой, если он настроен |
+| pull request | unit- и интеграционные тесты бэкенда, сборка четырёх образов без публикации |
+| push в `main` | то же, затем публикация образов в Docker Hub с тегами `latest`, `main` и `sha-<коммит>`, затем деплой, если он настроен |
 | тег `v1.2.0` | образы с тегами `1.2.0` и `1.2` |
 
-Образ бэкенда публикуется, только если прошли unit-тесты. Интеграционные тесты идут параллельно на PostgreSQL с PostGIS и pgvector, который поднимается в CI, и пока не блокируют публикацию: когда они станут зелёными на GitHub, добавьте `backend-integration` в `needs` задачи `backend-image`. Фронтенд собирается с `NEXT_PUBLIC_API_URL=/api`, поэтому один образ работает на любом адресе.
+Образы публикуются, только если прошли unit-тесты и в репозитории заданы `DOCKERHUB_USERNAME` и `DOCKERHUB_TOKEN`; без них CI только собирает образы. Интеграционные тесты идут параллельно на PostgreSQL с PostGIS и pgvector, который поднимается в CI, и пока не блокируют публикацию: когда они станут зелёными на GitHub, добавьте `backend-integration` в `needs` задачи `images`. Фронтенд собирается с `NEXT_PUBLIC_API_URL=/api`, поэтому один образ работает на любом адресе.
 
 Настройки репозитория (Settings → Secrets and variables → Actions):
 
@@ -386,7 +400,7 @@ docker compose run --rm api python -m app.cli load-ambulance
 | `DEPLOY_SSH_KEY` | secret | закрытый SSH-ключ этого пользователя |
 | `DEPLOY_KNOWN_HOSTS` | secret | вывод `ssh-keyscan <сервер>` |
 
-Деплой заходит на сервер по SSH и выполняет `git pull --ff-only`, `docker compose pull api web` и `docker compose up -d`. Если репозитории в Docker Hub приватные, один раз выполните на сервере `docker login`.
+Деплой заходит на сервер по SSH и выполняет `git pull --ff-only`, `docker compose pull` и `docker compose up -d --no-build`. Если репозитории в Docker Hub приватные, один раз выполните на сервере `docker login`.
 
 ## Если что-то не работает
 

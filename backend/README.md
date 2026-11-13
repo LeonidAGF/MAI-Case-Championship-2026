@@ -514,7 +514,9 @@ tests/              unit- и интеграционные тесты
    LLM_PROXY_URL=http://vpn-egress:8888
    ```
 
-   Затем пересоздайте стек: `docker compose up -d --build`.
+   Затем пересоздайте стек: на сервере `docker compose pull && docker compose up -d --no-build`
+   (образ `kekishev/case-championship-vpn-egress` собирается на вашем компьютере или в CI),
+   локально `docker compose up -d --build`.
 3. Проверьте туннель:
 
    ```bash

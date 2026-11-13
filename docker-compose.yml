@@ -1,13 +1,17 @@
 # The whole app on one machine: Caddy in front, the Next.js frontend, the FastAPI backend, PostgreSQL
 # (PostGIS + pgvector), Redis, monitoring, and an optional VPN tunnel for the chat (profile "vpn").
-# Run every docker compose command from the repository root:
+# Run every docker compose command from the repository root.
+# Build and publish the images on your PC (or let CI do it), never on the server:
+#   docker login -u kekishev
+#   docker compose --profile vpn build && docker compose --profile vpn push
+# On the server, only pull them:
 #   cp .env.example .env                        # site address, login, passwords (see the comments there)
-#   docker compose up -d --build                # build here, or use the CI images:
-#   docker compose pull api web && docker compose up -d
+#   docker compose pull && docker compose up -d --no-build
 #   docker compose run --rm api python -m app.cli seed
 #   docker compose run --rm api python -m app.cli load-ambulance
-# The site is http://localhost (or SITE_ADDRESS). The browser reaches the API on the same origin under
-# /api, so one frontend image works on any address. OSRM (MLOps) is not part of this file: point
+# Locally, `docker compose up -d --build` builds and runs everything in one go. The site is
+# http://localhost (or SITE_ADDRESS). The browser reaches the API on the same origin under /api, so
+# one frontend image works on any address. OSRM (MLOps) is not part of this file: point
 # OSRM_CAR_URL / OSRM_FOOT_URL in backend/.env at it.
 
 # The project name of the former backend/docker-compose.yml, so existing volumes (the database) are kept.
@@ -99,8 +103,8 @@ services:
     restart: unless-stopped
 
   db:
+    image: kekishev/case-championship-db:${IMAGE_TAG:-latest}
     build: ./backend/docker/db
-    image: atlas-db:pg16-postgis3-pgvector
     environment:
       POSTGRES_USER: atlas
       # Applied only when the database is first created (empty db-data volume).
@@ -132,8 +136,8 @@ services:
   # Starts only with COMPOSE_PROFILES=vpn; the config goes to backend/secrets/awg0.conf (git-ignored).
   vpn-egress:
     profiles: [vpn]
+    image: kekishev/case-championship-vpn-egress:${IMAGE_TAG:-latest}
     build: ./backend/docker/vpn-egress
-    image: atlas-vpn-egress:latest
     # Creating the tunnel interface and changing this container's routes needs these two, nothing else.
     cap_add:
       - NET_ADMIN
