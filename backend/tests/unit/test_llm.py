@@ -1,5 +1,6 @@
 """Claude client helpers and the chat loop with a scripted fake client: no network, no DB, no cost."""
 
+import asyncio
 import json
 from types import SimpleNamespace
 
@@ -239,3 +240,45 @@ async def test_missing_key_degrades_to_an_error_event(chat, monkeypatch: pytest.
     svc._client, svc.settings = None, make_settings(anthropic_api_key=None)
     out = await run(svc, [{"role": "user", "content": "Привет"}])
     assert out[-1] == ("error", {"code": "chat_unavailable", "message": "Чат не настроен: нет ключа Anthropic API (ANTHROPIC_API_KEY)"})
+
+
+# --------------------------------------------------------------------------- egress through LLM_PROXY_URL
+async def recording_proxy() -> tuple[asyncio.Server, str, list[bytes]]:
+    """A local proxy that records each request line and refuses it (403): nothing leaves the machine."""
+    seen: list[bytes] = []
+
+    async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        seen.append((await reader.readline()).strip())
+        writer.write(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(handle, "127.0.0.1", 0)
+    return server, f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}", seen
+
+
+async def test_llm_proxy_url_sends_the_client_through_the_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    server, url, seen = await recording_proxy()
+    async with server:
+        client = llm.make_client(make_settings(anthropic_api_key="sk-ant-test", llm_proxy_url=url, llm_max_retries=0))
+        try:
+            with pytest.raises(anthropic.APIConnectionError):
+                await client.models.retrieve("claude-sonnet-5-5")
+        finally:
+            await client.close()
+        refused = await llm._trace(url)
+    assert seen == [b"CONNECT api.anthropic.com:443 HTTP/1.1", b"CONNECT www.cloudflare.com:443 HTTP/1.1"]
+    assert refused["ok"] is False and refused["error"].startswith("ProxyError")
+
+
+def test_egress_label_status_and_proxy_url_validation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    assert llm.egress(make_settings()) == "direct"
+    tunneled = make_settings(anthropic_api_key="k", llm_proxy_url=" http://user:secret@vpn-egress:8888 ")
+    assert llm.egress(tunneled) == "proxy http://vpn-egress:8888"  # credentials are never shown
+    assert ChatService(SimpleNamespace(settings=tunneled, cfg=CFG)).status() == \
+        "enabled (claude-sonnet-5-5, effort medium, via proxy http://vpn-egress:8888)"
+    for bad in ("vpn-egress:8888", "socks5://vpn-egress:1080", "http://"):
+        with pytest.raises(ValueError, match="LLM_PROXY_URL"):
+            make_settings(llm_proxy_url=bad)

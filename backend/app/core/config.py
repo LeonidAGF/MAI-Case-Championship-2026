@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -99,6 +100,9 @@ class Settings(BaseSettings):
     llm_fallbacks: bool = True
     llm_timeout_s: float = Field(default=90.0, gt=0)
     llm_max_retries: int = Field(default=2, ge=0, le=5)
+    # HTTP proxy for the Anthropic client only, e.g. http://vpn-egress:8888: the AmneziaWG sidecar (the
+    # "vpn" profile of docker-compose.yml). Empty = direct. Other outbound requests never use it.
+    llm_proxy_url: str = ""
     chat_max_messages: int = 30
     chat_max_message_chars: int = 4000
     chat_rag_top_k: int = 4
@@ -135,6 +139,15 @@ class Settings(BaseSettings):
     def _blank_is_unset(cls, value: object) -> object:
         # `KEY=` lines in .env mean "not set", not an empty secret.
         return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("llm_proxy_url")
+    @classmethod
+    def _proxy_url(cls, value: str) -> str:
+        value = value.strip()
+        url = urlsplit(value)
+        if value and (url.scheme not in ("http", "https") or not url.hostname):
+            raise ValueError("LLM_PROXY_URL must be an http:// proxy URL, e.g. http://vpn-egress:8888")
+        return value
 
     # --- convenience -----------------------------------------------------------
     @property

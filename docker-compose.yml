@@ -1,0 +1,242 @@
+# The whole app on one machine: Caddy in front, the Next.js frontend, the FastAPI backend, PostgreSQL
+# (PostGIS + pgvector), Redis, monitoring, and an optional VPN tunnel for the chat (profile "vpn").
+# Run every docker compose command from the repository root:
+#   cp .env.example .env                        # site address, login, passwords (see the comments there)
+#   docker compose up -d --build                # build here, or use the CI images:
+#   docker compose pull api web && docker compose up -d
+#   docker compose run --rm api python -m app.cli seed
+#   docker compose run --rm api python -m app.cli load-ambulance
+# The site is http://localhost (or SITE_ADDRESS). The browser reaches the API on the same origin under
+# /api, so one frontend image works on any address. OSRM (MLOps) is not part of this file: point
+# OSRM_CAR_URL / OSRM_FOOT_URL in backend/.env at it.
+
+# The project name of the former backend/docker-compose.yml, so existing volumes (the database) are kept.
+name: atlas-backend
+
+services:
+  # Front door: HTTPS for a domain, one login for the whole site, /api/* -> api, the rest -> web.
+  caddy:
+    image: caddy:2.11-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      # Without them Caddy refuses to start, so the site is never open by accident.
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER:-}
+      BASIC_AUTH_HASH: ${BASIC_AUTH_HASH:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+      - api
+    restart: unless-stopped
+
+  web:
+    image: kekishev/case-championship-frontend:${IMAGE_TAG:-latest}
+    build:
+      context: ./web
+      args:
+        # Baked in at build time: the browser calls the API on the same origin, through Caddy.
+        NEXT_PUBLIC_API_URL: /api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    image: kekishev/case-championship-backend:${IMAGE_TAG:-latest}
+    build: ./backend
+    # The API's own settings (ANTHROPIC_API_KEY, LLM_MODEL, limits, ...). The values below win over it.
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://atlas:${POSTGRES_PASSWORD:-atlas}@db:5432/atlas
+      REDIS_URL: redis://redis:6379/0
+      DATA_DIR: /data
+      OSM_DATA_DIR: /osm
+      GRAPH_DIR: /graph
+      SRTM_DIR: /srtm
+      LOG_DIR: /var/log/atlas
+      EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      EMBEDDINGS_OFFLINE: ${EMBEDDINGS_OFFLINE:-true}
+      # Behind Caddy. It strips /api and uvicorn adds it back, so routes and the docs (/api/docs) work;
+      # the client address comes from X-Forwarded-For, which Caddy sets and clients cannot spoof.
+      UVICORN_ROOT_PATH: /api
+      FORWARDED_ALLOW_IPS: "*"
+      TRUST_FORWARDED_FOR: "true"
+      API_PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/api
+      # http://vpn-egress:8888 together with COMPOSE_PROFILES=vpn: the chat goes through the VPN tunnel.
+      LLM_PROXY_URL: ${LLM_PROXY_URL:-}
+    volumes:
+      # ML outputs (parquet) from the repository, read-only.
+      - ./data:/data:ro
+      # Real OSM objects and features (CSV, scripts/20-21), read-only.
+      - ./geo-embeddings/data:/osm:ro
+      # ML road graph (Git LFS) and the committed SRTM tiles, read-only: used by load-ambulance only.
+      - ./graph:/graph:ro
+      - ./backend/data/srtm:/srtm:ro
+      - api-logs:/var/log/atlas
+    # For local development (npm run dev, scripts) and debugging; the site itself goes through Caddy.
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  db:
+    build: ./backend/docker/db
+    image: atlas-db:pg16-postgis3-pgvector
+    environment:
+      POSTGRES_USER: atlas
+      # Applied only when the database is first created (empty db-data volume).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atlas}
+      POSTGRES_DB: atlas
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlas -d atlas"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # VPN egress for the chat's Anthropic requests (AmneziaWG + tinyproxy): see backend/README.md.
+  # Starts only with COMPOSE_PROFILES=vpn; the config goes to backend/secrets/awg0.conf (git-ignored).
+  vpn-egress:
+    profiles: [vpn]
+    build: ./backend/docker/vpn-egress
+    image: atlas-vpn-egress:latest
+    # Creating the tunnel interface and changing this container's routes needs these two, nothing else.
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    init: true
+    secrets:
+      - source: awg_config
+        target: awg0.conf
+    environment:
+      # amneziawg-go: error (default) | verbose | silent
+      LOG_LEVEL: ${AWG_LOG_LEVEL:-error}
+    # Reachable from the compose network only, never published on the host.
+    expose:
+      - "8888"
+    healthcheck:
+      # Runs inside the sidecar, so it goes through the tunnel: unhealthy means the tunnel is down.
+      test: ["CMD", "curl", "-fsS", "--max-time", "10", "-o", "/dev/null", "https://www.cloudflare.com/cdn-cgi/trace"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # --- monitoring: reachable on 127.0.0.1 only (on a server: ssh -L 3001:127.0.0.1:3001 ...) ---
+  prometheus:
+    image: prom/prometheus:v3.13.3
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./backend/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./backend/observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+  loki-init:
+    image: alpine:3.21
+    command: ["chown", "-R", "10001:10001", "/loki"]
+    volumes:
+      - loki-data:/loki
+
+  loki:
+    image: grafana/loki:3.7.0
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./backend/observability/loki/local-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:${LOKI_PORT:-3100}:3100"
+    depends_on:
+      loki-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.21.3
+    command:
+      - run
+      - --storage.path=/var/lib/alloy
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./backend/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - api-logs:/var/log/atlas:ro
+      - alloy-data:/var/lib/alloy
+    depends_on:
+      - loki
+      - api
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-atlas-demo-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./backend/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./backend/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+secrets:
+  awg_config:
+    file: ${AWG_CONFIG_FILE:-./backend/secrets/awg0.conf}
+
+volumes:
+  db-data:
+  api-logs:
+  prometheus-data:
+  loki-data:
+  alloy-data:
+  grafana-data:
+  caddy-data:
+  caddy-config:

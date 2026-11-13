@@ -126,7 +126,8 @@ class ChatService:
         if not self.settings.chat_enabled:
             return "disabled"
         if llm.configured(self.settings):
-            return f"enabled ({self.model}, effort {self.settings.llm_effort})"
+            via = f", via {llm.egress(self.settings)}" if self.settings.llm_proxy_url else ""
+            return f"enabled ({self.model}, effort {self.settings.llm_effort}{via})"
         return "enabled, credentials not found (ANTHROPIC_API_KEY)"
 
     def client(self) -> Any:

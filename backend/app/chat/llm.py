@@ -12,6 +12,9 @@ classification and the free connectivity check (``python -m app.cli chat-check``
   has none, so its requests go to the plain endpoint.
 * Credentials: ``ANTHROPIC_API_KEY`` from the environment or ``backend/.env`` (``Settings``);
   without it the chat reports ``chat_unavailable`` and the rest of the API keeps working.
+* Egress: with ``LLM_PROXY_URL`` this client, and nothing else in the app, connects through that HTTP
+  proxy: the AmneziaWG sidecar (the ``vpn`` profile of ``docker-compose.yml``). ``python -m app.cli egress-check``
+  shows the public IP and country both ways.
 """
 
 from __future__ import annotations
@@ -20,8 +23,10 @@ import logging
 import os
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 import anthropic
+import httpx
 
 log = logging.getLogger(__name__)
 
@@ -46,14 +51,24 @@ def configured(settings: Any) -> bool:
     return bool(api_key(settings) or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
 
 
+def egress(settings: Any) -> str:
+    """How the client reaches the API: 'direct' or 'proxy http://host:port' (never credentials)."""
+    if not settings.llm_proxy_url:
+        return "direct"
+    url = urlsplit(settings.llm_proxy_url)
+    return f"proxy {url.scheme}://{url.hostname}" + (f":{url.port}" if url.port else "")
+
+
 def make_client(settings: Any) -> anthropic.AsyncAnthropic:
-    """Raises LLMNotConfigured without credentials."""
+    """Raises LLMNotConfigured without credentials. With LLM_PROXY_URL every request goes through it."""
     if not configured(settings):
         raise LLMNotConfigured("ANTHROPIC_API_KEY is not set")
+    proxy = settings.llm_proxy_url
     return anthropic.AsyncAnthropic(
         api_key=api_key(settings),  # None: the SDK falls back to ANTHROPIC_AUTH_TOKEN
         timeout=anthropic.Timeout(settings.llm_timeout_s, connect=10.0),
         max_retries=settings.llm_max_retries,
+        http_client=anthropic.DefaultAsyncHttpxClient(proxy=proxy) if proxy else None,
     )
 
 
@@ -166,7 +181,7 @@ async def check(settings: Any) -> dict[str, Any]:
     """Key, network and model access: GET /v1/models/{model} is free (no tokens)."""
     out: dict[str, Any] = {
         "provider": "anthropic", "model": settings.llm_model, "effort": settings.llm_effort,
-        "fallbacks": uses_fallbacks(settings),
+        "fallbacks": uses_fallbacks(settings), "egress": egress(settings),
     }
     try:
         client = make_client(settings)
@@ -179,4 +194,32 @@ async def check(settings: Any) -> dict[str, Any]:
         out.update(ok=False, error=classify(exc, settings.llm_model).message, detail=describe(exc))
     finally:
         await client.close()
+    return out
+
+
+# Plain text with the caller's public address as Cloudflare sees it: "ip=..." and "loc=<country>".
+TRACE_URL = "https://www.cloudflare.com/cdn-cgi/trace"
+
+
+async def _trace(proxy: str | None) -> dict[str, Any]:
+    try:
+        async with httpx.AsyncClient(proxy=proxy, trust_env=False, timeout=15.0) as client:
+            response = await client.get(TRACE_URL)
+            response.raise_for_status()
+    except Exception as exc:  # noqa: BLE001 - reported to the operator, never raised
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    fields = dict(line.split("=", 1) for line in response.text.splitlines() if "=" in line)
+    return {"ok": True, "ip": fields.get("ip"), "country": fields.get("loc")}
+
+
+async def egress_check(settings: Any) -> dict[str, Any]:
+    """Public IP and country this server is seen from: directly, and through LLM_PROXY_URL (the tunnel).
+
+    ``tunneled`` is true when the proxy works and leaves from another address than the server itself.
+    """
+    out: dict[str, Any] = {"llm_egress": egress(settings), "direct": await _trace(None)}
+    if settings.llm_proxy_url:
+        via = await _trace(settings.llm_proxy_url)
+        out["via_proxy"] = via
+        out["tunneled"] = bool(via["ok"] and via["ip"] != out["direct"].get("ip"))
     return out

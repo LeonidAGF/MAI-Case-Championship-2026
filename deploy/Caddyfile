@@ -1,0 +1,23 @@
+# Front door of the whole app (docker-compose.yml). One origin, so the browser needs no CORS and one
+# login covers the site and the API:
+#   /api/*  -> the backend. The prefix is stripped here, and the API (UVICORN_ROOT_PATH=/api) adds it
+#              back for routing and for its docs at /api/docs.
+#   /*      -> the Next.js frontend.
+# SITE_ADDRESS (from .env): a domain pointed at this server gets HTTPS from Let's Encrypt automatically.
+# ":80" serves plain HTTP on any address, and then the password travels unencrypted.
+{$SITE_ADDRESS} {
+	# Only people with the login (teachers, the team) can open the site or call the API.
+	basic_auth {
+		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	}
+
+	handle_path /api/* {
+		# Prometheus scrapes the metrics inside the compose network; they are not published.
+		respond /metrics 404
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
