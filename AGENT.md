@@ -95,8 +95,10 @@ cd web && npm install && npm run dev  # optional: the frontend with hot reload o
 
 The site is at http://localhost (Caddy with the login from the root `.env`; Swagger at
 `/api/docs`). The API also listens on http://localhost:8000 for local use (health at `/healthz`),
-and Grafana on http://localhost:3001. CI (`.github/workflows/ci-cd.yml`) tests the backend and
-builds both images; a push to `main` publishes them to Docker Hub.
+and Grafana on http://localhost:3001. Images are built on a PC (`docker compose --profile vpn build`
+and `push`) or by CI (`.github/workflows/ci-cd.yml`, which also tests the backend) and published to
+Docker Hub as `kekishev/case-championship-{backend,frontend,db,vpn-egress}`. The server never builds:
+it runs `docker compose pull` and `docker compose up -d --no-build`.
 
 ## Rules for every change
 
