@@ -546,6 +546,59 @@ tests/              unit- и интеграционные тесты
 подходит). Версии `amneziawg-go` и `amneziawg-tools` закреплены в
 [Dockerfile](docker/vpn-egress/Dockerfile).
 
+### Выход к Anthropic через Xray
+
+Тот же выход можно построить на Xray вместо AmneziaWG: VLESS, VMess, Trojan или Shadowsocks поверх
+RAW, XHTTP или gRPC, с REALITY или TLS. Условие то же: сервер и VPS должны находиться в странах, где
+Anthropic API доступен.
+
+```
+пользователи ──► Caddy ──► api ──► интернет напрямую (всё, кроме запросов к LLM)
+                            │
+                            │ только клиент Anthropic: LLM_PROXY_URL=http://xray-egress:8888
+                            ▼
+                      xray-egress: Xray (HTTP-прокси) ══ VLESS + REALITY ══► VPS ──► api.anthropic.com
+```
+
+1. В приложении Amnezia поделитесь подключением к серверу с протоколом XRay (ключ `vpn://`, файл
+   `amnezia_config.vpn`) и сохраните его как `backend/secrets/xray.vpn`. Подойдёт и конфигурация
+   клиента Xray в формате JSON под тем же именем. В файле лежат ключи сервера, поэтому папка
+   `secrets/` в git не попадает.
+2. В `.env` в корне репозитория раскомментируйте пару строк для Xray, а строки для AmneziaWG оставьте
+   закомментированными:
+
+   ```
+   COMPOSE_PROFILES=xray
+   LLM_PROXY_URL=http://xray-egress:8888
+   ```
+
+   Затем пересоздайте стек: на сервере `docker compose pull && docker compose up -d --no-build`
+   (образ `kekishev/case-championship-xray-egress` собирается на вашем компьютере или в CI),
+   локально `docker compose up -d --build`.
+3. Проверьте туннель:
+
+   ```bash
+   docker compose logs xray-egress                          # "tunnel: vless to …", затем "accepted //api.anthropic.com:443 [api -> tunnel]" на каждый запрос чата
+   docker compose ps xray-egress                            # healthy: Cloudflare отвечает через туннель
+   docker compose exec api python -m app.cli egress-check   # IP и страна: direct — сервер, via_proxy — VPS, "tunneled": true
+   docker compose exec api python -m app.cli chat-check     # "egress": "proxy http://xray-egress:8888"
+   ```
+
+**Как это устроено.** При старте контейнер `xray-egress` ([docker/xray-egress](docker/xray-egress/))
+распаковывает ключ Amnezia (base64url, затем zlib), берёт из него подключение к серверу Xray вместе с
+настройками REALITY и XHTTP и собирает свою конфигурацию Xray
+([entrypoint.sh](docker/xray-egress/entrypoint.sh)). Единственный вход в ней — HTTP-прокси на порту
+8888 для клиента Anthropic. В туннель уходит только HTTPS к `api.anthropic.com` и `www.cloudflare.com`
+(для `egress-check`), остальные запросы отбрасываются. Xray сам работает как прокси, поэтому
+контейнеру не нужны ни `/dev/net/tun`, ни `NET_ADMIN`: он запускается без capabilities, с корневой
+файловой системой только для чтения, и его маршруты не меняются. Если туннель упал, запросы к
+Anthropic не уходят в обход: чат отвечает `llm_unavailable`, а остальной API работает.
+
+**Ограничения.** Из ключа Amnezia берётся первый сервер с протоколом XRay. Версия Xray-core и
+контрольные суммы её официальных архивов (amd64 и arm64) закреплены в
+[Dockerfile](docker/xray-egress/Dockerfile). Версия должна понимать параметры, которые выдаёт Amnezia:
+v26.10.21 понимает все параметры XHTTP, включая `xPadding*`.
+
 ### База знаний и RAG
 
 Кроме функций, чат опирается на базу знаний: фрагменты методики и проверенные материалы команды.

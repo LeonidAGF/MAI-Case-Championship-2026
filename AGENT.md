@@ -46,7 +46,7 @@ OSM, statistics ──► ML (scripts/) ──► data/, graph/, clast/, ml_resu
 browser ◄── web (Next.js) ◄── HTTP/JSON ──► backend (FastAPI) ──► PostgreSQL + PostGIS + pgvector
                                               │                    Redis (cache, rate limits)
                                               ├── Anthropic API: Claude (chat, optional; can go
-                                              │   through the AmneziaWG sidecar, LLM_PROXY_URL)
+                                              │   through the AmneziaWG or Xray sidecar, LLM_PROXY_URL)
                                               └── OSRM (exact what-if, not connected yet)
 ```
 
@@ -95,9 +95,9 @@ cd web && npm install && npm run dev  # optional: the frontend with hot reload o
 
 The site is at http://localhost (Caddy with the login from the root `.env`; Swagger at
 `/api/docs`). The API also listens on http://localhost:8000 for local use (health at `/healthz`),
-and Grafana on http://localhost:3001. Images are built on a PC (`docker compose --profile vpn build`
-and `push`) or by CI (`.github/workflows/ci-cd.yml`, which also tests the backend) and published to
-Docker Hub as `kekishev/case-championship-{backend,frontend,db,vpn-egress}`. The server never builds:
+and Grafana on http://localhost:3001. Images are built on a PC (`docker compose --profile vpn --profile
+xray build` and `push`) or by CI (`.github/workflows/ci-cd.yml`, which also tests the backend) and published
+to Docker Hub as `kekishev/case-championship-{backend,frontend,db,vpn-egress,xray-egress}`. The server never builds:
 it runs `docker compose pull` and `docker compose up -d --no-build`.
 
 ## Rules for every change
@@ -106,7 +106,7 @@ it runs `docker compose pull` and `docker compose up -d --no-build`.
   `ml_results/`, `geo-embeddings/data/`. The backend only reads `data/`, the OSM CSV files in
   `geo-embeddings/data/` and, in `load-ambulance`, the road graph in `graph/`.
 - **Secrets.** `backend/.env` holds the Anthropic API key. Never print it, copy it into other files or
-  commit it. Organisation API keys (`pulse_…`) are secrets too: the database keeps only their hashes. `backend/secrets/awg0.conf` (VPN egress) holds a private key and is gitignored too. `.env*` is gitignored, but `backend/.env.example` is tracked, so keep it secret-free.
+  commit it. Organisation API keys (`pulse_…`) are secrets too: the database keeps only their hashes. `backend/secrets/awg0.conf` and `backend/secrets/xray.vpn` (VPN egress) hold the tunnel keys and are gitignored too. `.env*` is gitignored, but `backend/.env.example` is tracked, so keep it secret-free.
 - **Paid calls.** `python -m app.cli chat-eval` and anything else that calls the Anthropic API costs
   money. Run them only when the user asks. `chat-check` is free.
 - **Real data only.** The product loads real data; synthetic values exist only in the integration

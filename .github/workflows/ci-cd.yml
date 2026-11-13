@@ -1,5 +1,5 @@
-# Tests the backend, builds the four Docker images of docker-compose.yml and pushes them to Docker Hub:
-#   kekishev/case-championship-backend, -frontend, -db, -vpn-egress
+# Tests the backend, builds the five Docker images of docker-compose.yml and pushes them to Docker Hub:
+#   kekishev/case-championship-backend, -frontend, -db, -vpn-egress, -xray-egress
 # The server only pulls them (docker compose pull && docker compose up -d --no-build).
 # Pull requests only build. A push to main publishes :latest, :main and :sha-<commit>; a tag like v1.2.0
 # publishes :1.2.0 and :1.2. Pushing needs, in Settings -> Secrets and variables -> Actions, the variable
@@ -97,6 +97,8 @@ jobs:
             context: backend/docker/db
           - name: vpn-egress
             context: backend/docker/vpn-egress
+          - name: xray-egress
+            context: backend/docker/xray-egress
     env:
       PUSH: ${{ github.event_name != 'pull_request' && vars.DOCKERHUB_USERNAME != '' }}
     steps:

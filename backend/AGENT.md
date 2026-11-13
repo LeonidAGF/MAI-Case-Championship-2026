@@ -25,7 +25,7 @@ Run `docker compose` from the repository root (one `docker-compose.yml` for the 
 | Task | Command |
 |---|---|
 | Whole app: Caddy, web, api, db, redis, monitoring (the root `.env` holds the site login, passwords, ports) | `docker compose up -d --build` |
-| Publish the four images to Docker Hub (on a PC or in CI, never on the server) | `docker login -u kekishev`, then `docker compose --profile vpn build` and `docker compose --profile vpn push` |
+| Publish the five images to Docker Hub (on a PC or in CI, never on the server) | `docker login -u kekishev`, then `docker compose --profile vpn --profile xray build` and `docker compose --profile vpn --profile xray push` |
 | Run on the server from Docker Hub images | `docker compose pull`, then `docker compose up -d --no-build` |
 | Reference tables, territories, OSM objects and features, chat knowledge (idempotent) | `docker compose run --rm api python -m app.cli seed` |
 | Only the OSM objects and features (removes leftover synthetic values) | `docker compose run --rm api python -m app.cli seed-osm` |
@@ -34,6 +34,7 @@ Run `docker compose` from the repository root (one `docker-compose.yml` for the 
 | Organisations, API keys, payment orders of the /v1 data API (team only) | `python -m app.cli org-add`, `key-issue`, `order-create`, … (`--help`) |
 | Check the chat key, network and model (free) | `docker compose run --rm api python -m app.cli chat-check` |
 | Chat through the VPN tunnel (AmneziaWG sidecar, needs `backend/secrets/awg0.conf`) | `COMPOSE_PROFILES=vpn` and `LLM_PROXY_URL=http://vpn-egress:8888` in the root `.env`, `docker compose up -d --build`, then `docker compose exec api python -m app.cli egress-check` |
+| Chat through an Xray tunnel instead (Xray sidecar, needs the Amnezia `vpn://` key or an Xray JSON config at `backend/secrets/xray.vpn`) | `COMPOSE_PROFILES=xray` and `LLM_PROXY_URL=http://xray-egress:8888` in the root `.env`, then the same commands |
 | Only DB and Redis (for a local API or tests) | `docker compose up -d db redis` |
 | Local install | `python -m venv .venv`, activate (`.venv\Scripts\Activate.ps1` or `source .venv/bin/activate`), `pip install -e ".[dev]"` |
 | Local API | `python -m app.cli migrate`, then `uvicorn app.main:app --reload` |
@@ -260,8 +261,8 @@ example and expects affected > 0 and monotonic deltas.
 ## Gotchas
 
 - `backend/.env` contains the Anthropic key (`ANTHROPIC_API_KEY`). Don't print, copy or commit it.
-  Organisation API keys (`pulse_…`) are secrets too, and so is `backend/secrets/awg0.conf` (the VPN
-  private key for the `vpn` compose profile).
+  Organisation API keys (`pulse_…`) are secrets too, and so are `backend/secrets/awg0.conf` and
+  `backend/secrets/xray.vpn` (the tunnel keys of the `vpn` and `xray` compose profiles).
 - `LLM_PROXY_URL` is used by the Anthropic client only (`app/chat/llm.py`). Don't route other traffic
   through it. The tunnel is for demonstrating VPN egress: the server and the VPS must both be in
   countries where Anthropic's API is available.

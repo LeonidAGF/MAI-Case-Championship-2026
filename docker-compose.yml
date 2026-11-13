@@ -1,9 +1,9 @@
 # The whole app on one machine: Caddy in front, the Next.js frontend, the FastAPI backend, PostgreSQL
-# (PostGIS + pgvector), Redis, monitoring, and an optional VPN tunnel for the chat (profile "vpn").
-# Run every docker compose command from the repository root.
+# (PostGIS + pgvector), Redis, monitoring, and an optional VPN tunnel for the chat (profile "vpn" for
+# AmneziaWG or "xray" for Xray). Run every docker compose command from the repository root.
 # Build and publish the images on your PC (or let CI do it), never on the server:
 #   docker login -u kekishev
-#   docker compose --profile vpn build && docker compose --profile vpn push
+#   docker compose --profile vpn --profile xray build && docker compose --profile vpn --profile xray push
 # On the server, only pull them:
 #   cp .env.example .env                        # site address, login, passwords (see the comments there)
 #   docker compose pull && docker compose up -d --no-build
@@ -78,7 +78,8 @@ services:
       API_PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/api
       # Browser origins allowed to call the API from another address (comma-separated), from the root .env.
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
-      # http://vpn-egress:8888 together with COMPOSE_PROFILES=vpn: the chat goes through the VPN tunnel.
+      # The chat goes through a VPN tunnel with http://vpn-egress:8888 and COMPOSE_PROFILES=vpn (AmneziaWG),
+      # or with http://xray-egress:8888 and COMPOSE_PROFILES=xray (Xray).
       LLM_PROXY_URL: ${LLM_PROXY_URL:-}
     volumes:
       # ML outputs (parquet) from the repository, read-only.
@@ -164,6 +165,39 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # The same egress over Xray (VLESS, REALITY, XHTTP, ...) instead of AmneziaWG: see backend/README.md.
+  # Starts only with COMPOSE_PROFILES=xray; the Amnezia vpn:// key (or an Xray JSON config) goes to
+  # backend/secrets/xray.vpn (git-ignored). Xray is the proxy itself: no TUN device, no capabilities.
+  xray-egress:
+    profiles: [xray]
+    image: kekishev/case-championship-xray-egress:${IMAGE_TAG:-latest}
+    build: ./backend/docker/xray-egress
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - source: xray_config
+        target: xray-client
+    environment:
+      # Xray: debug | info | warning (default) | error | none
+      LOG_LEVEL: ${XRAY_LOG_LEVEL:-warning}
+    # Reachable from the compose network only, never published on the host.
+    expose:
+      - "8888"
+    healthcheck:
+      # Through the proxy, so through the tunnel: unhealthy means the tunnel is down.
+      test: ["CMD", "curl", "-fsS", "--max-time", "10", "-o", "/dev/null", "-x", "http://127.0.0.1:8888", "https://www.cloudflare.com/cdn-cgi/trace"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
   # --- monitoring: reachable on 127.0.0.1 only (on a server: ssh -L 3001:127.0.0.1:3001 ...) ---
   prometheus:
     image: prom/prometheus:v3.13.3
@@ -236,6 +270,8 @@ services:
 secrets:
   awg_config:
     file: ${AWG_CONFIG_FILE:-./backend/secrets/awg0.conf}
+  xray_config:
+    file: ${XRAY_CONFIG_FILE:-./backend/secrets/xray.vpn}
 
 volumes:
   db-data:

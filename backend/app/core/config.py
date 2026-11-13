@@ -100,8 +100,9 @@ class Settings(BaseSettings):
     llm_fallbacks: bool = True
     llm_timeout_s: float = Field(default=90.0, gt=0)
     llm_max_retries: int = Field(default=2, ge=0, le=5)
-    # HTTP proxy for the Anthropic client only, e.g. http://vpn-egress:8888: the AmneziaWG sidecar (the
-    # "vpn" profile of docker-compose.yml). Empty = direct. Other outbound requests never use it.
+    # HTTP proxy for the Anthropic client only: http://vpn-egress:8888 (the AmneziaWG sidecar, the "vpn"
+    # profile of docker-compose.yml) or http://xray-egress:8888 (the Xray sidecar, the "xray" profile).
+    # Empty = direct. Other outbound requests never use it.
     llm_proxy_url: str = ""
     chat_max_messages: int = 30
     chat_max_message_chars: int = 4000

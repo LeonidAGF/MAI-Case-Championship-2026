@@ -349,14 +349,14 @@ TEST_DATABASE_URL=postgresql+asyncpg://atlas:atlas@localhost:5432/atlas_test
 
 ## Развёртывание на сервере и CI/CD
 
-На сервере ничего не собирается: все четыре образа (`kekishev/case-championship-backend`, `-frontend`, `-db`, `-vpn-egress`) собираются на вашем компьютере или в CI и публикуются в Docker Hub, а сервер их только скачивает.
+На сервере ничего не собирается: все пять образов (`kekishev/case-championship-backend`, `-frontend`, `-db`, `-vpn-egress`, `-xray-egress`) собираются на вашем компьютере или в CI и публикуются в Docker Hub, а сервер их только скачивает.
 
 **1. Собрать и опубликовать образы** (на своём компьютере, из корня репозитория, с запущенным Docker Desktop):
 
 ```bash
 docker login -u kekishev                  # пароль — токен доступа Docker Hub с правами Read & Write
-docker compose --profile vpn build        # бэкенд, фронтенд, база и VPN-контейнер
-docker compose --profile vpn push         # в Docker Hub с тегом latest
+docker compose --profile vpn --profile xray build   # бэкенд, фронтенд, база и оба VPN-контейнера
+docker compose --profile vpn --profile xray push    # в Docker Hub с тегом latest
 ```
 
 Чтобы опубликовать ещё и версию с тегом коммита, повторите `build` и `push` с `IMAGE_TAG=<тег>` (PowerShell: `$env:IMAGE_TAG = git rev-parse --short HEAD`); сборка возьмёт слои из кеша.
@@ -378,13 +378,13 @@ docker compose run --rm api python -m app.cli load-ambulance
 - Снаружи открыты только порты 80 и 443 (Caddy). Если в `SITE_ADDRESS` указан домен, направленный на сервер, Caddy сам получит сертификат Let's Encrypt. С `SITE_ADDRESS=:80` сайт работает по HTTP, и пароль передаётся без шифрования.
 - Сайт и API закрыты одним логином (`BASIC_AUTH_USER`, `BASIC_AUTH_HASH`). Без него Caddy не запускается, поэтому сайт не окажется открытым по ошибке.
 - API, база, Redis и мониторинг слушают только `127.0.0.1`. Grafana с вашего компьютера: `ssh -L 3001:127.0.0.1:3001 <пользователь>@<сервер>`, затем http://localhost:3001.
-- Чат через VPN-туннель: в `.env` раскомментируйте `COMPOSE_PROFILES=vpn` и `LLM_PROXY_URL=http://vpn-egress:8888` и положите конфигурацию AmneziaWG в `backend/secrets/awg0.conf` (подробнее — в [backend/README.md](backend/README.md#выход-к-anthropic-через-vpn)).
+- Чат через VPN-туннель: в `.env` раскомментируйте одну пару строк. Для AmneziaWG это `COMPOSE_PROFILES=vpn` и `LLM_PROXY_URL=http://vpn-egress:8888`, конфигурация — в `backend/secrets/awg0.conf` (подробнее — в [backend/README.md](backend/README.md#выход-к-anthropic-через-vpn)). Для Xray это `COMPOSE_PROFILES=xray` и `LLM_PROXY_URL=http://xray-egress:8888`, ключ Amnezia `vpn://` — в `backend/secrets/xray.vpn` (подробнее — в [backend/README.md](backend/README.md#выход-к-anthropic-через-xray)).
 
 **CI/CD.** Workflow [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml):
 
 | Событие | Что происходит |
 |---|---|
-| pull request | unit- и интеграционные тесты бэкенда, сборка четырёх образов без публикации |
+| pull request | unit- и интеграционные тесты бэкенда, сборка пяти образов без публикации |
 | push в `main` | то же, затем публикация образов в Docker Hub с тегами `latest`, `main` и `sha-<коммит>`, затем деплой, если он настроен |
 | тег `v1.2.0` | образы с тегами `1.2.0` и `1.2` |
 
