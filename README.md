@@ -118,7 +118,7 @@ npm install    # зависимости, достаточно один раз
 npm run dev    # приложение на http://localhost:3000
 ```
 
-Фронтенд обращается к API по адресу `http://localhost:8000`. Если API работает на другом адресе, укажите его в `web/.env.local`, например `NEXT_PUBLIC_API_URL=http://localhost:8080`. Бэкенд принимает запросы браузера только с адресов из `CORS_ORIGINS` (по умолчанию `http://localhost:3000`).
+Фронтенд обращается к API по адресу `http://localhost:8000`. Если API работает на другом адресе, укажите его в `web/.env.local`, например `NEXT_PUBLIC_API_URL=http://localhost:8080`. Бэкенд принимает запросы браузера только с адресов из `CORS_ORIGINS` (по умолчанию `http://localhost:3000`). Для API в Docker эта переменная задаётся в `.env` в корне репозитория, для API без Docker — в `backend/.env`; несколько адресов перечисляются через запятую.
 
 ### 3. Проверка
 
@@ -413,7 +413,7 @@ docker compose run --rm api python -m app.cli load-ambulance
 | `/healthz` показывает `feature_data: empty` | Признаки не загружены: выполните `seed` (или `seed-osm`) |
 | Панели Grafana пустые | Откройте несколько страниц приложения и подождите |
 | Интеграционные тесты пропускаются | Не задан `TEST_DATABASE_URL` |
-| Фронтенд не видит API | В Docker фронтенд ходит в API через `/api` того же адреса. При `npm run dev` проверьте `NEXT_PUBLIC_API_URL` в `web/.env.local` и `CORS_ORIGINS` в `backend/.env` |
+| Фронтенд не видит API | В Docker фронтенд ходит в API через `/api` того же адреса. При `npm run dev` проверьте `NEXT_PUBLIC_API_URL` в `web/.env.local` и `CORS_ORIGINS` в `.env` в корне репозитория (для API без Docker — в `backend/.env`), затем `docker compose up -d api` |
 
 ## Статус и ограничения
 

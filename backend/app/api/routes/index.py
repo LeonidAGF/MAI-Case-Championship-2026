@@ -105,6 +105,8 @@ async def get_index(
             subindices=subindices_out(score, c.cfg),
             attractiveness=attractiveness_out(score, c.cfg),
             result_id=result_id,
+            climate_match=score.climate_match,
+            climate_adjustment_points=r1(score.climate_adjustment_points),
         )
 
     code = normalize_cluster(cluster)
@@ -140,7 +142,10 @@ async def get_index(
         {"c": code},
     )
     meta = {r.id: r for r in meta_rows}
-    tids = [t for t in cs.scores if t in meta and (region is None or meta[t].region_code == region)]
+    threshold = profile.filters.climate_match_min
+    tids = [t for t in cs.scores if t in meta and (region is None or meta[t].region_code == region)
+            and (threshold is None or (cs.scores[t].climate_match is not None
+                                       and cs.scores[t].climate_match >= threshold))]
 
     def sort_value(tid: int) -> float:
         s = cs.scores[tid]
@@ -162,6 +167,8 @@ async def get_index(
             rank=cs.rank_of(t),
             subindices=subindices_out(cs.scores[t], c.cfg),
             attractiveness=attractiveness_out(cs.scores[t], c.cfg),
+            climate_match=cs.scores[t].climate_match,
+            climate_adjustment_points=r1(cs.scores[t].climate_adjustment_points),
         )
         for t in page
     ]

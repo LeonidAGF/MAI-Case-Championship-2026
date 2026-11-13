@@ -164,9 +164,13 @@ async def territories_geojson(
     if with_index and level == "settlement":
         for cl in sorted({r.cluster_code for r in rows if r.cluster_code}):
             cs = await c.scoring.score_cluster(session, cl, profile)
-            scores.update({tid: (round(s.total, 1), cs.rank_of(tid)) for tid, s in cs.scores.items()})
+            threshold = profile.filters.climate_match_min
+            scores.update({tid: (round(s.total, 1), cs.rank_of(tid)) for tid, s in cs.scores.items()
+                           if threshold is None or (s.climate_match is not None and s.climate_match >= threshold)})
     features = []
     for r in rows:
+        if with_index and level == "settlement" and profile.filters.climate_match_min is not None and r.id not in scores:
+            continue
         if r.g is None:
             continue
         props: dict[str, Any] = {

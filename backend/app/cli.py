@@ -119,6 +119,14 @@ async def cmd_seed_osm(args: argparse.Namespace) -> Any:
 async def cmd_seed(args: argparse.Namespace) -> Any:
     out = {"reference": await cmd_seed_reference(args), "territories": await cmd_load_territories(args)}
     out["osm"] = await cmd_seed_osm(args)
+    climate_file = get_settings().data_dir / "climate_2025_features.csv"
+    if climate_file.exists():
+        from app.etl.features import load_features
+
+        out["climate_2025"] = await _in_transaction(
+            "features", str(climate_file),
+            lambda s: load_features(s, climate_file, source="NASA POWER Daily API; 2025 UTC", replace=True),
+        )
     out["knowledge"] = await cmd_seed_knowledge(args)
     return out
 

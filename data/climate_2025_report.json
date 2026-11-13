@@ -1,0 +1,62 @@
+{
+  "year": 2025,
+  "time_standard": "UTC",
+  "grid_cells": 195,
+  "settlements": 3403,
+  "grid_resolution_degrees": {
+    "latitude": 0.5,
+    "longitude": 0.625
+  },
+  "warm_day_definition": "daily T2M_MAX >= 20.0 C",
+  "extreme_day_definition": "daily T2M_MIN < -15 C OR T2M_MAX > 30 C",
+  "wet_day_definition": "daily PRECTOTCORR > 5 mm/day",
+  "metadata": {
+    "T2M": {
+      "url": "https://power.larc.nasa.gov/api/temporal/daily/regional?latitude-min=41&latitude-max=47&longitude-min=40&longitude-max=49&parameters=T2M&community=AG&start=20250101&end=20251231&format=JSON&time-standard=UTC",
+      "sources": [
+        "MERRA2"
+      ],
+      "units": "C"
+    },
+    "T2M_MAX": {
+      "url": "https://power.larc.nasa.gov/api/temporal/daily/regional?latitude-min=41&latitude-max=47&longitude-min=40&longitude-max=49&parameters=T2M_MAX&community=AG&start=20250101&end=20251231&format=JSON&time-standard=UTC",
+      "sources": [
+        "MERRA2",
+        "POWER"
+      ],
+      "units": "C"
+    },
+    "T2M_MIN": {
+      "url": "https://power.larc.nasa.gov/api/temporal/daily/regional?latitude-min=41&latitude-max=47&longitude-min=40&longitude-max=49&parameters=T2M_MIN&community=AG&start=20250101&end=20251231&format=JSON&time-standard=UTC",
+      "sources": [
+        "MERRA2",
+        "POWER"
+      ],
+      "units": "C"
+    },
+    "RH2M": {
+      "url": "https://power.larc.nasa.gov/api/temporal/daily/regional?latitude-min=41&latitude-max=47&longitude-min=40&longitude-max=49&parameters=RH2M&community=AG&start=20250101&end=20251231&format=JSON&time-standard=UTC",
+      "sources": [
+        "MERRA2",
+        "POWER"
+      ],
+      "units": "%"
+    },
+    "PRECTOTCORR": {
+      "url": "https://power.larc.nasa.gov/api/temporal/daily/regional?latitude-min=41&latitude-max=47&longitude-min=40&longitude-max=49&parameters=PRECTOTCORR&community=AG&start=20250101&end=20251231&format=JSON&time-standard=UTC",
+      "sources": [
+        "MERRA2"
+      ],
+      "units": "mm/day"
+    },
+    "WS10M": {
+      "url": "https://power.larc.nasa.gov/api/temporal/daily/regional?latitude-min=41&latitude-max=47&longitude-min=40&longitude-max=49&parameters=WS10M&community=AG&start=20250101&end=20251231&format=JSON&time-standard=UTC",
+      "sources": [
+        "MERRA2",
+        "POWER"
+      ],
+      "units": "m/s"
+    }
+  },
+  "max_grid_distance_km": 37.254
+}

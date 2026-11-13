@@ -5,7 +5,7 @@ import yaml
 
 from app.cache import MemoryCache
 from app.chat.grounding import check_grounding, parse_numbers
-from app.core.config import BACKEND_DIR
+from app.core.config import BACKEND_DIR, Settings
 from app.core.ratelimit import RateLimiter
 from app.etl.io import parse_number, read_csv
 from app.etl.stats import parse_long, parse_wide
@@ -25,6 +25,12 @@ def test_default_config_and_report_inconsistency() -> None:
     assert any("realtor" in w for w in cfg.warnings)
     assert abs(sum(cfg.presets["realtor"].weights.values()) - 100) < 0.1
     assert cfg.badge_for(57.7) == {"code": "stable", "label": "Стабильная"}
+
+
+def test_cors_origins_from_env_value() -> None:
+    settings = Settings(_env_file=None, cors_origins=" https://atlas.example.com/ ,http://localhost:3000,, ")
+    assert settings.cors_origin_list == ["https://atlas.example.com", "http://localhost:3000"]
+    assert Settings(_env_file=None).cors_origin_list == ["http://localhost:3000"]
 
 
 def test_config_rejects_unknown_subindex() -> None:

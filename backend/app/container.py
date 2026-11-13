@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.ambulance.config import load_ambulance_config
 from app.ambulance.service import AmbulanceService
 from app.cache import MemoryCache, RedisCache, make_cache
+from app.climate.service import ClimateService
 from app.core.config import Settings
 from app.core.ratelimit import RateLimiter
 from app.db.session import make_engine, make_sessionmaker
@@ -45,6 +46,7 @@ class Container:
     osrm: OsrmClient
     whatif: WhatIfService
     ambulance: AmbulanceService
+    climate: ClimateService
     chat: ChatService | None = None
     _model_version_id: int | None = field(default=None, repr=False)
     _mv_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -92,7 +94,8 @@ def build_container(settings: Settings, *, with_chat: bool = True) -> Container:
     sessionmaker = make_sessionmaker(db)
     cache = make_cache(settings.redis_url, settings.cache_prefix)
     # 5 presets x 3 clusters stay hot; ~10 MB per large-cluster result.
-    scoring = ScoringService(cfg, engine, MatrixStore(), DataRevision(), lru_size=16)
+    climate = ClimateService(settings.data_dir)
+    scoring = ScoringService(cfg, engine, MatrixStore(), DataRevision(), lru_size=16, climate=climate)
     osrm = OsrmClient(
         settings.osrm_car_url,
         settings.osrm_foot_url,
@@ -112,6 +115,7 @@ def build_container(settings: Settings, *, with_chat: bool = True) -> Container:
         osrm=osrm,
         whatif=WhatIfService(cfg, settings, scoring, osrm),
         ambulance=AmbulanceService(load_ambulance_config(settings.ambulance_config_path)),
+        climate=climate,
     )
     if with_chat:
         from app.chat.service import ChatService

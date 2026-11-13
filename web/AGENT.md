@@ -47,7 +47,7 @@ State on 2026-11-12:
 The API base URL is `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`), set in
 `web/.env.local`, which is gitignored by the root `.env*` rule. It is inlined at build time, so
 rebuild after changing it. With `npm run dev` the backend must list the web origin in
-`CORS_ORIGINS`. The Docker image (root `docker-compose.yml`, CI) is built with
+`CORS_ORIGINS` (the root `.env` when the API runs in Docker). The Docker image (root `docker-compose.yml`, CI) is built with
 `NEXT_PUBLIC_API_URL=/api`: the browser calls the API on the same origin through Caddy. So keep
 request URLs as `${API}/path`, never `new URL(path, API)`, which fails with a relative base. To
 check something manually, run the stack (`docker compose up -d` in the repository root, plus
