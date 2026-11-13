@@ -1,0 +1,105 @@
+# Ambulance travel time («время доезда скорой помощи») — parameters of the backend model.
+#
+# Validated by backend/app/ambulance/config.py (unknown keys fail). Times are computed once by
+# `python -m app.cli load-ambulance` on the ML road graph (graph/*.parquet, read-only): every road
+# edge gets the maximum speed of its road from OpenStreetMap, slowed down by the SRTM height and
+# slope of the road; a shortest-path search runs from all ambulance bases at once.
+#
+# Two kinds of keys:
+#   * the model itself (bases, speeds, urban, dem, slope, height, access, closed_access): change them,
+#     then re-run load-ambulance (the API flags results computed with other values as stale);
+#   * how results are reported (norm_minutes, thresholds, dispatch_minutes, uncertainty): applied by
+#     the API when it answers, so a restart is enough.
+version: "ambulance-1.0"
+
+# Ambulance bases: OSM objects of these categories (the `poi` table, loaded by `seed-osm`).
+# OSM maps only ~23 ambulance stations in the district; crews of district hospitals (ЦРБ) are based
+# at the hospitals, so hospitals count as bases too (the same proxy as the index feature).
+bases:
+  categories: [ambulance, hospital]
+  snap_max_m: 3000            # objects farther than this from the main road network are dropped
+
+# Maximum speed of a road edge (km/h): the OSM `maxspeed` tag of the way when it is set, otherwise
+# the maximum permitted speed of its road type (ПДД РФ 10.2–10.3: 60 in built-up areas, 90 outside,
+# 110 on motorways, 20 in living zones and courtyards). Low-class roads get the lower speed their
+# design allows. `{urban, rural}`: the value depends on whether the edge is in a built-up area.
+speeds:
+  maxspeed_tags:              # implicit OSM values (compared case-insensitively)
+    "RU:urban": 60
+    "RU:rural": 90
+    "RU:motorway": 110
+    "RU:living_street": 20
+    "walk": 5
+  maxspeed_range: [5, 150]    # tagged values outside this range are treated as mapping errors
+  by_type:
+    motorway: 110
+    motorway_link: 60
+    trunk: {urban: 60, rural: 90}
+    trunk_link: 60
+    primary: {urban: 60, rural: 90}
+    primary_link: 60
+    secondary: {urban: 60, rural: 90}
+    secondary_link: 60
+    tertiary: {urban: 60, rural: 90}
+    tertiary_link: 60
+    unclassified: 60          # minor local roads, often narrow or unpaved: 90 is not reachable
+    road: 60                  # road of unknown class
+    residential: 60
+    living_street: 20
+    service: 20               # courtyards, driveways, parking aisles
+    track: 30                 # field and forest tracks
+  default: 30                 # any other road type
+
+# Built-up areas (for the urban/rural speeds above), detected from the road network itself:
+# an edge is urban when the residential streets around it (a 3×3 block of cell_m squares) are at
+# least min_street_km long, counting both directions of two-way streets. Checked against the
+# ~25,800 OSM edges tagged maxspeed=RU:urban / RU:rural (2026-11-11 snapshot): 88% of the urban
+# ones are detected as urban, 19% of the rural ones are taken for urban (the safer error: slower).
+urban:
+  enabled: true
+  cell_m: 300
+  street_types: [residential, living_street]
+  min_street_km: 1.5
+
+# SRTM 1″ (~30 m) is smoothed over about this distance before sampling, against its metre-level noise.
+dem:
+  smooth_m: 90
+
+# Road grade along the direction of travel (uphill > 0), measured over at least baseline_m along
+# the road. Bridges and tunnels count as level (SRTM shows the ground under them, not the deck).
+# Factor curves: [|grade|, speed multiplier], linear in between, flat beyond the ends.
+slope:
+  enabled: true
+  baseline_m: 100
+  max_grade: 0.30             # steeper values are SRTM artefacts (a cliff next to the road)
+  steep_grade: 0.08           # reported as "steep sections" of a route
+  uphill:   [[0.03, 1.00], [0.06, 0.92], [0.10, 0.78], [0.15, 0.62], [0.20, 0.50]]
+  downhill: [[0.03, 1.00], [0.06, 0.96], [0.10, 0.86], [0.15, 0.72], [0.20, 0.60]]
+
+# Height of the road above sea level (SRTM): mountain roads are narrower, with weather and less
+# engine power. [metres, speed multiplier], linear in between.
+height:
+  enabled: true
+  points: [[500, 1.00], [1000, 0.97], [1500, 0.93], [2000, 0.88], [2500, 0.82], [3000, 0.76]]
+
+# The last stretch between a point (settlement, base) and the nearest road-graph node.
+access:
+  speed_kmh: 20
+  detour: 1.3                 # straight line × detour
+  max_km: 3                   # farther from any reachable road: no estimate
+
+# OSM `access` values that close a road even for an ambulance.
+closed_access: ["no"]
+
+# --- reporting (applied by the API) -------------------------------------------------------------
+# Arrival norm for emergency calls: 20 minutes from the call (приказ Минздрава России № 388н).
+norm_minutes: 20
+thresholds: [10, 20, 30, 60]
+# Added to every travel time: taking the call and the crew's departure. 0 = driving time only.
+dispatch_minutes: 0
+# Error band of an estimate: travel × (1 − minus) … travel × (1 + plus), at least ± min_minutes.
+# It is wider upwards: the model drives at the maximum permitted speed everywhere.
+uncertainty:
+  minus: 0.10
+  plus: 0.15
+  min_minutes: 1.0

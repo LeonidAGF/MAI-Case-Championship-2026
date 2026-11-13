@@ -204,6 +204,55 @@ async def cmd_load_knowledge(args: argparse.Namespace) -> Any:
     )
 
 
+def _graph_tiles(graph_dir: Path) -> list[tuple[int, int]]:
+    """SRTM tiles under the road graph (from the node coordinates only)."""
+    import pyarrow.parquet as pq
+
+    from app.ambulance.dem import tiles_covering
+    from app.ambulance.graph import check_graph_file
+
+    nodes = graph_dir / "nodes.parquet"
+    check_graph_file(nodes)
+    table = pq.read_table(nodes, columns=["lon", "lat"])
+    return tiles_covering(table["lon"].to_numpy(), table["lat"].to_numpy())
+
+
+async def cmd_fetch_srtm(args: argparse.Namespace) -> Any:
+    from app.ambulance.dem import fetch_tiles
+
+    settings = get_settings()
+    graph_dir = Path(args.graph_dir) if args.graph_dir else settings.graph_dir
+    srtm_dir = Path(args.srtm_dir) if args.srtm_dir else settings.srtm_dir
+    return await fetch_tiles(
+        _graph_tiles(graph_dir), srtm_dir, settings.srtm_url, arcsec=args.arcsec or settings.srtm_arcsec,
+        source_dir=Path(args.source_dir) if args.source_dir else None, timeout_s=settings.srtm_timeout_s,
+    )
+
+
+async def cmd_load_ambulance(args: argparse.Namespace) -> Any:
+    """Ambulance travel times to all settlements: road graph + OSM max speeds + SRTM height and slope."""
+    from app.ambulance.config import load_ambulance_config
+    from app.ambulance.dem import fetch_tiles
+    from app.etl.ambulance import load_ambulance
+
+    settings = get_settings()
+    cfg = load_ambulance_config(settings.ambulance_config_path)
+    graph_dir = Path(args.graph_dir) if args.graph_dir else settings.graph_dir
+    srtm_dir = None if args.no_terrain else (Path(args.srtm_dir) if args.srtm_dir else settings.srtm_dir)
+    out: dict[str, Any] = {}
+    if srtm_dir is not None:
+        url = "" if args.offline else settings.srtm_url
+        out["srtm"] = await fetch_tiles(_graph_tiles(graph_dir), srtm_dir, url, arcsec=settings.srtm_arcsec,
+                                        timeout_s=settings.srtm_timeout_s)
+    report = settings.osm_data_dir / "osm_poi_report.json"
+    osm_base = json.loads(report.read_text(encoding="utf-8")).get("osm_base") if report.exists() else None
+    out["ambulance"] = await _in_transaction(
+        "ambulance", str(graph_dir),
+        lambda s: load_ambulance(s, cfg, graph_dir=graph_dir, dem_dir=srtm_dir, osm_base=osm_base),
+    )
+    return out
+
+
 async def cmd_coverage(_: argparse.Namespace) -> Any:
     from app.etl.coverage import coverage_report
 
@@ -324,6 +373,20 @@ def build_parser() -> argparse.ArgumentParser:
     kn.add_argument("--embed", action="store_true")
     sub.add_parser("seed-knowledge", help="replace the model-methodology knowledge catalog with vector embeddings")
 
+    fs = sub.add_parser("fetch-srtm", help="add the missing SRTM elevation tiles under the road graph to SRTM_DIR")
+    fs.add_argument("--graph-dir", help="folder with nodes.parquet (default GRAPH_DIR)")
+    fs.add_argument("--srtm-dir", help="tile folder (default SRTM_DIR)")
+    fs.add_argument("--arcsec", type=int, choices=[1, 3], help="resolution to store (default SRTM_ARCSEC = 3)")
+    fs.add_argument("--source-dir", help="take the tiles from this local folder instead of downloading them")
+    la = sub.add_parser(
+        "load-ambulance",
+        help="ambulance travel times to all settlements: road graph, OSM max speeds, SRTM height and slope",
+    )
+    la.add_argument("--graph-dir", help="folder with nodes.parquet / edges.parquet (default GRAPH_DIR)")
+    la.add_argument("--srtm-dir", help="SRTM tile folder (default SRTM_DIR)")
+    la.add_argument("--offline", action="store_true", help="do not download missing SRTM tiles")
+    la.add_argument("--no-terrain", action="store_true", help="ignore height and slope (no SRTM)")
+
     sub.add_parser("coverage", help="data completeness report (JSON)")
     oa = sub.add_parser("export-openapi", help="write the OpenAPI contract for the frontend")
     oa.add_argument("--out", default=str(BACKEND_DIR / "openapi.json"))
@@ -347,6 +410,8 @@ ASYNC_COMMANDS = {
     "load-od-matrix": cmd_load_od,
     "load-knowledge": cmd_load_knowledge,
     "seed-knowledge": cmd_seed_knowledge,
+    "fetch-srtm": cmd_fetch_srtm,
+    "load-ambulance": cmd_load_ambulance,
     "coverage": cmd_coverage,
     "chat-check": cmd_chat_check,
     "chat-eval": cmd_chat_eval,

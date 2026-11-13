@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.ambulance.config import load_ambulance_config
+from app.ambulance.service import AmbulanceService
 from app.cache import MemoryCache, RedisCache, make_cache
 from app.core.config import Settings
 from app.core.ratelimit import RateLimiter
@@ -42,6 +44,7 @@ class Container:
     rate_limiter: RateLimiter
     osrm: OsrmClient
     whatif: WhatIfService
+    ambulance: AmbulanceService
     chat: ChatService | None = None
     _model_version_id: int | None = field(default=None, repr=False)
     _mv_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -59,6 +62,7 @@ class Container:
 
     def reset_caches(self) -> None:
         self.scoring.clear()
+        self.ambulance.clear()
         self._model_version_id = None
 
     async def warmup(self) -> None:
@@ -107,6 +111,7 @@ def build_container(settings: Settings, *, with_chat: bool = True) -> Container:
         rate_limiter=RateLimiter(cache, enabled=settings.rate_limit_enabled),
         osrm=osrm,
         whatif=WhatIfService(cfg, settings, scoring, osrm),
+        ambulance=AmbulanceService(load_ambulance_config(settings.ambulance_config_path)),
     )
     if with_chat:
         from app.chat.service import ChatService

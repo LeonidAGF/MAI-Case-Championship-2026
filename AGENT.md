@@ -2,10 +2,10 @@
 
 Pulse Score is a web service with a map of the North Caucasus Federal District (СКФО). For each
 of 3,403 settlements it shows a 0–100 accessibility-of-life index with 7 subindices, compares
-territories, runs "what if" scenarios (open a hospital, repair a road, …) and answers questions
-in a chat. It is the team's solution to case A2 «Индекс транспортной связанности» of MAI Case
-Championship 2026 (team Team_Epsilon). Product UI and human docs are in Russian; code, comments
-and these agent docs are in English.
+territories, runs "what if" scenarios (open a hospital, repair a road, …), estimates ambulance
+travel times and answers questions in a chat. It is the team's solution to case A2 «Индекс
+транспортной связанности» of MAI Case Championship 2026 (team Team_Epsilon). Product UI and human
+docs are in Russian; code, comments and these agent docs are in English.
 
 ## Read next
 
@@ -40,7 +40,8 @@ docs/links       numbered list of sources (market, migration and population stat
 ```
 OSM, statistics ──► ML (scripts/) ──► data/, graph/, clast/, ml_results/, geo-embeddings/data/
                                         │ committed files; backend `seed` reads data/ and
-                                        │ geo-embeddings/data/ (OSM CSV), never writes ML folders
+                                        │ geo-embeddings/data/ (OSM CSV), `load-ambulance` reads
+                                        │ graph/; the backend never writes ML folders
                                         ▼
 browser ◄── web (Next.js) ◄── HTTP/JSON ──► backend (FastAPI) ──► PostgreSQL + PostGIS + pgvector
                                               │                    Redis (cache, rate limits)
@@ -95,8 +96,8 @@ http://localhost:3001.
 ## Rules for every change
 
 - **ML artifacts are read-only** unless the task is ML work: `data/`, `graph/`, `clast/`,
-  `ml_results/`, `geo-embeddings/data/`. The backend only reads `data/` and the OSM CSV files in
-  `geo-embeddings/data/`.
+  `ml_results/`, `geo-embeddings/data/`. The backend only reads `data/`, the OSM CSV files in
+  `geo-embeddings/data/` and, in `load-ambulance`, the road graph in `graph/`.
 - **Secrets.** `backend/.env` holds the Anthropic API key. Never print it, copy it into other files or
   commit it. `.env*` is gitignored, but `backend/.env.example` is tracked, so keep it secret-free.
 - **Paid calls.** `python -m app.cli chat-eval` and anything else that calls the Anthropic API costs
@@ -107,6 +108,8 @@ http://localhost:3001.
   warning, metrics, `/data/coverage`).
 - **No OpenStreetMap at runtime.** OSM is read once by `scripts/20_fetch_osm_poi.py`, and the results
   are committed as CSV in `geo-embeddings/data/`. The backend only reads those files during `seed`.
+  Elevation works the same way: the SRTM tiles (3″) are committed in `backend/data/srtm/` and read
+  only by `load-ambulance`; `fetch-srtm` downloads missing ones. Nothing external at request time.
 - **Texts.** UI strings and API error messages are Russian. User-facing text never shows feature,
   subindex or scenario codes such as F01, S3 or W2 (backend tests check this).
 - **Large files.** Anything over ~50 MB goes through Git LFS (`.gitattributes`).
@@ -126,6 +129,7 @@ Change both sides in the same branch, or coordinate with the owner:
 | Model config YAML + `IndexEngine` | ML (`MODEL_CONFIG_PATH`, `SCORING_ENGINE`) | `backend/app/modelcfg.py`, `backend/app/scoring/contract.py` |
 | Territory parquet schemas | ML (`data/*.parquet`) | `backend/app/etl/territories.py` |
 | OSM objects and features (`osm_poi.csv`, `osm_features.csv`) | ML (`scripts/20-21`, `geo-embeddings/data/`) | `backend/app/cli.py` (`seed`, `seed-osm`), `app/etl/poi.py`, `app/etl/features.py` |
+| Road graph (`graph/nodes.parquet`: `node_id, lon, lat`, sorted; `graph/edges.parquet`: `u, v, length_m, highway, maxspeed, bridge, tunnel, access`) | ML (`graph/`, Git LFS) | `backend/app/ambulance/graph.py` (`load-ambulance`) |
 
 ## Git
 
