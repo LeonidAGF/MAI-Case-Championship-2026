@@ -473,7 +473,7 @@
     {
       "id": 9,
       "title": "Запрошенные субъекты с запуска",
-      "description": "Успешные выгрузки с явным параметром region с запуска API. Запросы всего округа и только по району не включены.",
+      "description": "Успешные выгрузки с явным параметром region или конкретным territory_id. Запросы всего округа и только по району не включены.",
       "type": "bargauge",
       "datasource": {
         "type": "prometheus",
@@ -1100,6 +1100,354 @@
         "showCommonLabels": false,
         "wrapLogMessage": true,
         "enableLogDetails": true
+      }
+    },
+    {
+      "id": 23,
+      "title": "Поиски НП с запуска",
+      "description": "Успешные поиски по названию с запуска API. Один поиск может вернуть несколько пунктов.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(atlas_partner_settlement_requests_total{operation=\"search\",status=\"200\"}) or vector(0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 24,
+      "title": "Карточки НП с запуска",
+      "description": "Успешные обращения к /v1/settlements/{territory_id} с запуска API.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 54,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(atlas_partner_settlement_requests_total{operation=\"detail\",status=\"200\"}) or vector(0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 25,
+      "title": "Выгрузки одного НП",
+      "description": "Успешные CSV/JSON выгрузки с явным territory_id с запуска API.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 54,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(atlas_partner_settlement_requests_total{operation=\"export\",status=\"200\"}) or vector(0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 26,
+      "title": "Поиски без результата",
+      "description": "Поиски по названию, которые вернули ноль пунктов с запуска API.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 54,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(atlas_partner_settlement_search_empty_total) or vector(0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 27,
+      "title": "Какие населённые пункты запрашивали чаще",
+      "description": "Топ 20 за выбранный период: только успешные явные запросы карточки или выгрузки одного пункта. Массовая выгрузка района или субъекта не приписывается каждому селу.",
+      "type": "table",
+      "datasource": {
+        "type": "loki",
+        "uid": "atlas-loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 58,
+        "w": 24,
+        "h": 12
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(20, sum by (territory_id, settlement_name, settlement_region) (count_over_time({job=\"atlas\",service=\"api\",partner_operation=~\"detail|export\"} | json | settlement_request=\"true\" | __error__=\"\" [$__range])))",
+          "datasource": {
+            "type": "loki",
+            "uid": "atlas-loki"
+          },
+          "instant": true,
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "keepLabels": [
+              "territory_id",
+              "settlement_name",
+              "settlement_region"
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "settlement_name": 0,
+              "settlement_region": 1,
+              "territory_id": 2,
+              "Value #A": 3
+            },
+            "renameByName": {
+              "settlement_name": "Населённый пункт",
+              "settlement_region": "Субъект",
+              "territory_id": "ID",
+              "Value #A": "Запросов"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "title": "Точечный спрос по субъектам",
+      "description": "Число успешных обращений к конкретным пунктам по субъектам с запуска API; ID пунктов не добавляются в метки Prometheus.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 70,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (region) (atlas_partner_settlement_requests_total{operation=~\"detail|export\",status=\"200\",region=~\"RU-.*\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 29,
+      "title": "Операции с населёнными пунктами / мин",
+      "description": "Поиск, карточка и выгрузка одного пункта по статусам за последние пять минут.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "atlas-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 70,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "60 * sum by (operation, status) (rate(atlas_partner_settlement_requests_total[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "atlas-prometheus"
+          },
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     }
   ]

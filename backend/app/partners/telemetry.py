@@ -41,10 +41,26 @@ EXPORT_BYTES = Counter(
     "Uncompressed response body bytes returned by successful organisation API exports.",
     ("dataset", "format", "region"),
 )
+SETTLEMENT_REQUESTS = Counter(
+    "atlas_partner_settlement_requests_total",
+    "Organisation API settlement searches, detail views and single-settlement exports by bounded dimensions.",
+    ("operation", "dataset", "region", "status"),
+)
+SETTLEMENT_SEARCH_EMPTY = Counter(
+    "atlas_partner_settlement_search_empty_total",
+    "Successful organisation API settlement searches with no matches.",
+    ("region",),
+)
+
+
+def api_path(scope: dict[str, Any]) -> str:
+    path = scope.get("path", "")
+    root = scope.get("root_path", "").rstrip("/")
+    return path[len(root):] if root and path.startswith(root + "/") else path
 
 
 def request_labels(scope: dict[str, Any]) -> tuple[str, str, str] | None:
-    if not scope.get("path", "").startswith("/v1/"):
+    if not api_path(scope).startswith("/v1/"):
         return None
     route = getattr(scope.get("route"), "path", "")
     params = scope.get("path_params") or {}
@@ -52,22 +68,32 @@ def request_labels(scope: dict[str, Any]) -> tuple[str, str, str] | None:
         return "account", "json", "n/a"
     if route == "/v1/datasets":
         return "catalog", "json", "n/a"
-    if route == "/v1/scenario-runs/{run_id}.{fmt}":
+    if route == "/v1/settlements":
+        dataset, fmt = "settlement_search", "json"
+    elif route == "/v1/settlements/{territory_id}":
+        dataset, fmt = "settlement_detail", "json"
+    elif route == "/v1/scenario-runs/{run_id}.{fmt}":
         fmt = params.get("fmt")
         return "scenario_run", fmt if fmt in FORMATS else "invalid", "n/a"
-    if route != "/v1/datasets/{dataset}.{fmt}":
+    elif route == "/v1/datasets/{dataset}.{fmt}":
+        dataset = params.get("dataset")
+        fmt = params.get("fmt")
+        dataset = dataset if dataset in DATASETS else "invalid"
+        fmt = fmt if fmt in FORMATS else "invalid"
+    else:
         return "invalid", "invalid", "n/a"
-    dataset = params.get("dataset")
-    fmt = params.get("fmt")
     query = QueryParams(scope.get("query_string", b""))
     raw_region = (query.get("region") or "").strip().upper()
-    if raw_region:
+    state_region = (scope.get("state") or {}).get("partner_settlement_region")
+    if state_region in REGIONS:
+        region = state_region
+    elif raw_region:
         region = raw_region if raw_region in REGIONS else "invalid"
     elif query.get("municipality_id") is not None:
         region = "by_municipality"
     else:
         region = "all"
-    return dataset if dataset in DATASETS else "invalid", fmt if fmt in FORMATS else "invalid", region
+    return dataset, fmt, region
 
 
 def record_export(dataset: str, fmt: str, region: str, rows: int, size_bytes: int, duration: float) -> None:

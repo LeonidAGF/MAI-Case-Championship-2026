@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ambulance.texts import CATEGORY_LABEL
 from app.core.errors import NotFoundError
+from app.etl.names import normalize_search
 from app.etl.demo import SYNTHETIC_SOURCE
 from app.modelcfg import ModelConfig
 from app.partners.tables import Column, Table
@@ -62,6 +63,7 @@ class Ctx:
     session: AsyncSession
     region: str | None = None
     municipality_id: int | None = None
+    territory_id: int | None = None
     cluster: str | None = None
     profile: Profile | None = None
     mode: str = "car"
@@ -110,7 +112,7 @@ async def base_meta(ctx: Ctx) -> dict[str, Any]:
         "model_version": ctx.c.cfg.version,
         "synthetic_demo_data": bool(synthetic),
         "filters": {k: v for k, v in (("region", ctx.region), ("municipality_id", ctx.municipality_id),
-                                      ("cluster", ctx.cluster)) if v is not None},
+                                      ("territory_id", ctx.territory_id), ("cluster", ctx.cluster)) if v is not None},
         "attribution": ATTRIBUTION,
     }
 
@@ -126,6 +128,9 @@ async def settlement_rows(ctx: Ctx) -> list[Any]:
     if ctx.cluster:
         conds.append("t.cluster_code = :cluster")
         params["cluster"] = ctx.cluster
+    if ctx.territory_id is not None:
+        conds.append("t.id = :territory_id")
+        params["territory_id"] = ctx.territory_id
     where = " AND ".join(conds)  # fixed fragments only; values are bound parameters
     rows = await ctx.session.execute(
         text(
@@ -143,6 +148,43 @@ async def settlement_rows(ctx: Ctx) -> list[Any]:
         params,
     )
     return rows.all()
+
+
+async def require_settlement(ctx: Ctx) -> Any:
+    rows = await settlement_rows(ctx)
+    if not rows:
+        raise NotFoundError("Населённый пункт не найден для указанных фильтров", code="settlement_not_found")
+    return rows[0]
+
+
+async def search_settlements(ctx: Ctx, query: str, limit: int, offset: int) -> tuple[int, list[dict[str, Any]]]:
+    normalized = normalize_search(query)
+    if not normalized:
+        return 0, []
+    conditions = ["t.level = 'settlement'", "t.is_scored",
+                  "(strpos(t.name_normalized, :query) > 0 OR similarity(t.name_normalized, :query) > 0.35)"]
+    params: dict[str, Any] = {"query": normalized, "limit": limit, "offset": offset}
+    if ctx.region:
+        conditions.append("t.region_code = :region")
+        params["region"] = ctx.region
+    if ctx.municipality_id is not None:
+        conditions.append("t.parent_id = :municipality_id")
+        params["municipality_id"] = ctx.municipality_id
+    where = " AND ".join(conditions)
+    total = (await ctx.session.execute(text(f"SELECT count(*) FROM territory t WHERE {where}"), params)).scalar_one()
+    rows = (await ctx.session.execute(text(f"""
+        SELECT t.id, t.name, t.kind, t.cluster_code, t.parent_id AS municipality_id,
+               m.name AS municipality, t.region_code, r.name AS region, t.population
+        FROM territory t
+        LEFT JOIN territory m ON m.id = t.parent_id
+        LEFT JOIN territory r ON r.level = 'region' AND r.region_code = t.region_code
+        WHERE {where}
+        ORDER BY (t.name_normalized = :query) DESC,
+                 similarity(t.name_normalized, :query) DESC,
+                 t.population DESC NULLS LAST, t.id
+        LIMIT :limit OFFSET :offset
+    """), params)).mappings().all()
+    return total, [dict(row) for row in rows]
 
 
 def _place(r: Any) -> dict[str, Any]:
@@ -271,6 +313,7 @@ async def _ambulance_rows(ctx: Ctx) -> tuple[Any, list[Any]]:
         if (ctx.region is None or r.region_code == ctx.region)
         and (ctx.municipality_id is None or r.municipality_id == ctx.municipality_id)
         and (ctx.cluster is None or r.cluster == ctx.cluster)
+        and (ctx.territory_id is None or r.territory_id == ctx.territory_id)
     ]
     rows.sort(key=lambda r: (r.region_code or "", r.municipality or "", r.name, r.territory_id))
     return table, rows
@@ -382,17 +425,17 @@ DATASETS: dict[str, DatasetDef] = {
     for d in (
         DatasetDef("settlements", "Населённые пункты",
                    "Справочник 3 403 населённых пунктов: id, код OpenStreetMap, район, субъект, кластер, население, координаты.",
-                   ("region", "municipality_id", "cluster"), settlement_columns, build_settlements),
+                   ("region", "municipality_id", "territory_id", "cluster"), settlement_columns, build_settlements),
         DatasetDef("features", "Признаки населённых пунктов",
                    "Значения признаков с единицей, датой и источником. layout=long — строка на значение, "
                    "layout=wide — строка на пункт, столбец на признак. Пустое значение — нет данных.",
-                   ("region", "municipality_id", "cluster", "mode", "layout"), feature_columns, build_features),
+                   ("region", "municipality_id", "territory_id", "cluster", "mode", "layout"), feature_columns, build_features),
         DatasetDef("index", "Индекс доступности",
                    "Индекс 0–100 и субиндексы под профиль (profile=family и др. или p=…), место в кластере.",
-                   ("region", "municipality_id", "cluster", "profile", "p"), index_columns, build_index),
+                   ("region", "municipality_id", "territory_id", "cluster", "profile", "p"), index_columns, build_index),
         DatasetDef("ambulance", "Время доезда скорой помощи",
                    "Время доезда до каждого пункта: оценка, диапазон погрешности, норматив 20 минут, ближайшая база.",
-                   ("region", "municipality_id", "cluster"), ambulance_columns, build_ambulance),
+                   ("region", "municipality_id", "territory_id", "cluster"), ambulance_columns, build_ambulance),
         DatasetDef("municipalities", "Покрытие скорой помощью по районам",
                    "Для каждого района: сколько пунктов и жителей скорая достигает за 20 минут, медиана и максимум.",
                    ("region", "municipality_id"), municipality_columns, build_municipalities),

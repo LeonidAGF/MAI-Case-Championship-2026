@@ -20,6 +20,7 @@ class JsonFormatter(logging.Formatter):
         for key in (
             "method", "route", "status", "duration_ms", "scenario", "method_used", "affected",
             "dataset", "export_format", "requested_region", "organisation_id", "key_id", "export_rows", "export_bytes",
+            "partner_operation", "search_results", "territory_id", "settlement_name", "settlement_region", "settlement_request",
         ):
             if hasattr(record, key):
                 fields[key] = getattr(record, key)

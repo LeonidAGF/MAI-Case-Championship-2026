@@ -595,3 +595,31 @@ class V1Catalog(BaseModel):
     meta: dict[str, Any] = Field(description="Ревизия данных, версия модели, время выгрузки, атрибуция")
     datasets: list[V1Dataset]
     notes: list[str]
+
+
+class V1SettlementMatch(BaseModel):
+    id: int
+    name: str
+    kind: str | None
+    cluster_code: str | None
+    municipality_id: int | None
+    municipality: str | None
+    region_code: str | None
+    region: str | None
+    population: int | None
+
+
+class V1SettlementSearch(BaseModel):
+    items: list[V1SettlementMatch]
+    total: int
+    limit: int
+    offset: int
+
+
+class V1SettlementDetail(BaseModel):
+    settlement: dict[str, Any]
+    index: dict[str, Any] | None
+    features: list[dict[str, Any]]
+    ambulance: dict[str, Any] | None
+    ambulance_status: Literal["available", "no_estimate", "not_computed"]
+    meta: dict[str, Any]

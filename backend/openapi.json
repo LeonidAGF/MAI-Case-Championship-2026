@@ -1379,8 +1379,8 @@
               "anyOf": [
                 {
                   "enum": [
-                    "region",
-                    "municipality"
+                    "municipality",
+                    "region"
                   ],
                   "type": "string"
                 },
@@ -1455,6 +1455,198 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/climate/2025/grid": {
+      "get": {
+        "tags": [
+          "climate"
+        ],
+        "summary": "Сезонная сетка 2025 года для плавной окраски карты",
+        "operationId": "grid_climate_2025_grid_get",
+        "parameters": [
+          {
+            "name": "season",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "winter",
+                "spring",
+                "summer",
+                "autumn"
+              ],
+              "type": "string",
+              "default": "summer",
+              "title": "Season"
+            }
+          },
+          {
+            "name": "region_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Region Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClimateGridResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/climate/2025/regions": {
+      "get": {
+        "tags": [
+          "climate"
+        ],
+        "summary": "Сводка по субъектам СКФО за выбранный сезон 2025 года",
+        "operationId": "regions_climate_2025_regions_get",
+        "parameters": [
+          {
+            "name": "season",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "winter",
+                "spring",
+                "summer",
+                "autumn"
+              ],
+              "type": "string",
+              "default": "summer",
+              "title": "Season"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClimateRegionsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/climate/2025/settlements/{territory_id}": {
+      "get": {
+        "tags": [
+          "climate"
+        ],
+        "summary": "Паспорт условий 2025 года для населённого пункта",
+        "operationId": "settlement_climate_2025_settlements__territory_id__get",
+        "parameters": [
+          {
+            "name": "territory_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Territory Id"
+            }
+          },
+          {
+            "name": "profile",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "id пресета (family, pensioner, ...)",
+              "title": "Profile"
+            },
+            "description": "id пресета (family, pensioner, ...)"
+          },
+          {
+            "name": "p",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Сериализованный профиль из URL: base64url(JSON) или base64url(deflate-raw(JSON))",
+              "title": "P"
+            },
+            "description": "Сериализованный профиль из URL: base64url(JSON) или base64url(deflate-raw(JSON))"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClimateSettlementResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -2049,12 +2241,291 @@
         ]
       }
     },
+    "/v1/settlements": {
+      "get": {
+        "tags": [
+          "organisations"
+        ],
+        "summary": "Поиск населённого пункта по названию с районом и субъектом",
+        "operationId": "settlements_search_v1_settlements_get",
+        "security": [
+          {
+            "OrganisationKey": []
+          },
+          {
+            "OrganisationKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100,
+              "description": "Название или его часть",
+              "title": "Q"
+            },
+            "description": "Название или его часть"
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Код субъекта ISO 3166-2",
+              "title": "Region"
+            },
+            "description": "Код субъекта ISO 3166-2"
+          },
+          {
+            "name": "municipality_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "id района",
+              "title": "Municipality Id"
+            },
+            "description": "id района"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1SettlementSearch"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа API или ключ неверный",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ключ отозван, истёк или не даёт этого доступа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settlements/{territory_id}": {
+      "get": {
+        "tags": [
+          "organisations"
+        ],
+        "summary": "Данные одного населённого пункта: индекс, признаки, скорая",
+        "operationId": "settlement_detail_v1_settlements__territory_id__get",
+        "security": [
+          {
+            "OrganisationKey": []
+          },
+          {
+            "OrganisationKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "territory_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Territory Id"
+            }
+          },
+          {
+            "name": "profile",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "id пресета (family, pensioner, ...)",
+              "title": "Profile"
+            },
+            "description": "id пресета (family, pensioner, ...)"
+          },
+          {
+            "name": "p",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Сериализованный профиль из URL: base64url(JSON) или base64url(deflate-raw(JSON))",
+              "title": "P"
+            },
+            "description": "Сериализованный профиль из URL: base64url(JSON) или base64url(deflate-raw(JSON))"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1SettlementDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа API или ключ неверный",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ключ отозван, истёк или не даёт этого доступа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/datasets/{dataset}.{fmt}": {
       "get": {
         "tags": [
           "organisations"
         ],
-        "summary": "Набор данных в CSV или JSON (фильтры по субъекту, району, кластеру)",
+        "summary": "Набор данных в CSV или JSON (фильтры по субъекту, району, кластеру, пункту)",
         "operationId": "dataset_v1_datasets__dataset___fmt__get",
         "security": [
           {
@@ -2121,6 +2592,24 @@
               "title": "Municipality Id"
             },
             "description": "id района"
+          },
+          {
+            "name": "territory_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "id населённого пункта; кроме набора municipalities",
+              "title": "Territory Id"
+            },
+            "description": "id населённого пункта; кроме набора municipalities"
           },
           {
             "name": "cluster",
@@ -3800,6 +4289,590 @@
         ],
         "title": "ChatRequest"
       },
+      "ClimateCell": {
+        "properties": {
+          "season": {
+            "type": "string",
+            "enum": [
+              "winter",
+              "spring",
+              "summer",
+              "autumn"
+            ],
+            "title": "Season"
+          },
+          "temperature_c": {
+            "type": "number",
+            "title": "Temperature C"
+          },
+          "humidity_pct": {
+            "type": "number",
+            "title": "Humidity Pct"
+          },
+          "wind_m_s": {
+            "type": "number",
+            "title": "Wind M S"
+          },
+          "warm_days": {
+            "type": "integer",
+            "title": "Warm Days"
+          },
+          "extreme_days": {
+            "type": "integer",
+            "title": "Extreme Days"
+          },
+          "wet_days": {
+            "type": "integer",
+            "title": "Wet Days"
+          },
+          "days_in_season": {
+            "type": "integer",
+            "title": "Days In Season"
+          },
+          "color": {
+            "type": "string",
+            "enum": [
+              "green",
+              "yellow",
+              "red"
+            ],
+            "title": "Color"
+          },
+          "temperature_deviation_c": {
+            "type": "number",
+            "title": "Temperature Deviation C"
+          },
+          "humidity_deviation_pct": {
+            "type": "number",
+            "title": "Humidity Deviation Pct"
+          },
+          "grid_lon": {
+            "type": "number",
+            "title": "Grid Lon"
+          },
+          "grid_lat": {
+            "type": "number",
+            "title": "Grid Lat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "temperature_c",
+          "humidity_pct",
+          "wind_m_s",
+          "warm_days",
+          "extreme_days",
+          "wet_days",
+          "days_in_season",
+          "color",
+          "temperature_deviation_c",
+          "humidity_deviation_pct",
+          "grid_lon",
+          "grid_lat"
+        ],
+        "title": "ClimateCell"
+      },
+      "ClimateGridResponse": {
+        "properties": {
+          "year": {
+            "type": "integer",
+            "title": "Year",
+            "default": 2025
+          },
+          "period_label": {
+            "type": "string",
+            "title": "Period Label",
+            "default": "данные за 2025 год"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "NASA POWER Daily API"
+          },
+          "time_standard": {
+            "type": "string",
+            "title": "Time Standard",
+            "default": "UTC"
+          },
+          "grid_resolution_degrees": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Grid Resolution Degrees"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ClimateTarget"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/ClimateCell"
+            },
+            "type": "array",
+            "title": "Cells"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "cells"
+        ],
+        "title": "ClimateGridResponse"
+      },
+      "ClimateRange": {
+        "properties": {
+          "temperature_min_c": {
+            "type": "number",
+            "maximum": 60.0,
+            "minimum": -60.0,
+            "title": "Temperature Min C"
+          },
+          "temperature_max_c": {
+            "type": "number",
+            "maximum": 60.0,
+            "minimum": -60.0,
+            "title": "Temperature Max C"
+          },
+          "humidity_min_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Humidity Min Pct"
+          },
+          "humidity_max_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Humidity Max Pct"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "temperature_min_c",
+          "temperature_max_c"
+        ],
+        "title": "ClimateRange",
+        "description": "Desired seasonal conditions for the main map; values are user preferences."
+      },
+      "ClimateRegion": {
+        "properties": {
+          "territory_id": {
+            "type": "integer",
+            "title": "Territory Id"
+          },
+          "region_code": {
+            "type": "string",
+            "title": "Region Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "grid_cells": {
+            "type": "integer",
+            "title": "Grid Cells"
+          },
+          "season": {
+            "type": "string",
+            "enum": [
+              "winter",
+              "spring",
+              "summer",
+              "autumn"
+            ],
+            "title": "Season"
+          },
+          "temperature_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature C"
+          },
+          "humidity_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Humidity Pct"
+          },
+          "wind_m_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind M S"
+          },
+          "average_warm_days": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Warm Days"
+          },
+          "average_extreme_days": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Extreme Days"
+          },
+          "average_wet_days": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Wet Days"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "green",
+                  "yellow",
+                  "red"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "temperature_deviation_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Deviation C"
+          },
+          "humidity_deviation_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Humidity Deviation Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "territory_id",
+          "region_code",
+          "name",
+          "grid_cells",
+          "season",
+          "temperature_c",
+          "humidity_pct",
+          "wind_m_s",
+          "average_warm_days",
+          "average_extreme_days",
+          "average_wet_days",
+          "color",
+          "temperature_deviation_c",
+          "humidity_deviation_pct"
+        ],
+        "title": "ClimateRegion"
+      },
+      "ClimateRegionsResponse": {
+        "properties": {
+          "year": {
+            "type": "integer",
+            "title": "Year",
+            "default": 2025
+          },
+          "period_label": {
+            "type": "string",
+            "title": "Period Label",
+            "default": "данные за 2025 год"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "NASA POWER Daily API"
+          },
+          "time_standard": {
+            "type": "string",
+            "title": "Time Standard",
+            "default": "UTC"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ClimateTarget"
+          },
+          "regions": {
+            "items": {
+              "$ref": "#/components/schemas/ClimateRegion"
+            },
+            "type": "array",
+            "title": "Regions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "regions"
+        ],
+        "title": "ClimateRegionsResponse"
+      },
+      "ClimateSettlementResponse": {
+        "properties": {
+          "year": {
+            "type": "integer",
+            "title": "Year",
+            "default": 2025
+          },
+          "period_label": {
+            "type": "string",
+            "title": "Period Label",
+            "default": "данные за 2025 год"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "NASA POWER Daily API"
+          },
+          "time_standard": {
+            "type": "string",
+            "title": "Time Standard",
+            "default": "UTC"
+          },
+          "territory_id": {
+            "type": "integer",
+            "title": "Territory Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "region_code": {
+            "type": "string",
+            "title": "Region Code"
+          },
+          "grid_lon": {
+            "type": "number",
+            "title": "Grid Lon"
+          },
+          "grid_lat": {
+            "type": "number",
+            "title": "Grid Lat"
+          },
+          "grid_distance_km": {
+            "type": "number",
+            "title": "Grid Distance Km"
+          },
+          "warm_days": {
+            "type": "integer",
+            "title": "Warm Days"
+          },
+          "extreme_days": {
+            "type": "integer",
+            "title": "Extreme Days"
+          },
+          "wet_days": {
+            "type": "integer",
+            "title": "Wet Days"
+          },
+          "seasons": {
+            "items": {
+              "$ref": "#/components/schemas/ClimateValue"
+            },
+            "type": "array",
+            "title": "Seasons"
+          },
+          "personal_match": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Personal Match",
+            "description": "0..1; null if desired_climate was not set"
+          }
+        },
+        "type": "object",
+        "required": [
+          "territory_id",
+          "name",
+          "region_code",
+          "grid_lon",
+          "grid_lat",
+          "grid_distance_km",
+          "warm_days",
+          "extreme_days",
+          "wet_days",
+          "seasons",
+          "personal_match"
+        ],
+        "title": "ClimateSettlementResponse"
+      },
+      "ClimateTarget": {
+        "properties": {
+          "temperature_min_c": {
+            "type": "number",
+            "title": "Temperature Min C"
+          },
+          "temperature_max_c": {
+            "type": "number",
+            "title": "Temperature Max C"
+          },
+          "humidity_min_pct": {
+            "type": "number",
+            "title": "Humidity Min Pct"
+          },
+          "humidity_max_pct": {
+            "type": "number",
+            "title": "Humidity Max Pct"
+          },
+          "yellow_temperature_margin_c": {
+            "type": "number",
+            "title": "Yellow Temperature Margin C",
+            "default": 4.0
+          },
+          "yellow_humidity_margin_pct": {
+            "type": "number",
+            "title": "Yellow Humidity Margin Pct",
+            "default": 15.0
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "project_target_not_climate_normal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "temperature_min_c",
+          "temperature_max_c",
+          "humidity_min_pct",
+          "humidity_max_pct"
+        ],
+        "title": "ClimateTarget"
+      },
+      "ClimateValue": {
+        "properties": {
+          "season": {
+            "type": "string",
+            "enum": [
+              "winter",
+              "spring",
+              "summer",
+              "autumn"
+            ],
+            "title": "Season"
+          },
+          "temperature_c": {
+            "type": "number",
+            "title": "Temperature C"
+          },
+          "humidity_pct": {
+            "type": "number",
+            "title": "Humidity Pct"
+          },
+          "wind_m_s": {
+            "type": "number",
+            "title": "Wind M S"
+          },
+          "warm_days": {
+            "type": "integer",
+            "title": "Warm Days"
+          },
+          "extreme_days": {
+            "type": "integer",
+            "title": "Extreme Days"
+          },
+          "wet_days": {
+            "type": "integer",
+            "title": "Wet Days"
+          },
+          "days_in_season": {
+            "type": "integer",
+            "title": "Days In Season"
+          },
+          "color": {
+            "type": "string",
+            "enum": [
+              "green",
+              "yellow",
+              "red"
+            ],
+            "title": "Color"
+          },
+          "temperature_deviation_c": {
+            "type": "number",
+            "title": "Temperature Deviation C"
+          },
+          "humidity_deviation_pct": {
+            "type": "number",
+            "title": "Humidity Deviation Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "temperature_c",
+          "humidity_pct",
+          "wind_m_s",
+          "warm_days",
+          "extreme_days",
+          "wet_days",
+          "days_in_season",
+          "color",
+          "temperature_deviation_c",
+          "humidity_deviation_pct"
+        ],
+        "title": "ClimateValue"
+      },
       "ClusterInfo": {
         "properties": {
           "code": {
@@ -4249,6 +5322,34 @@
             "type": "number",
             "title": "Baseline",
             "description": "Типичная территория кластера: сумма медианных вкладов"
+          },
+          "climate_delta": {
+            "type": "number",
+            "title": "Climate Delta",
+            "description": "Сумма delta климатических компонентов внутри waterfall",
+            "default": 0
+          },
+          "climate_contribution": {
+            "type": "number",
+            "title": "Climate Contribution",
+            "description": "Вклад S6 в общий балл",
+            "default": 0
+          },
+          "climate_match": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Climate Match"
+          },
+          "climate_adjustment_points": {
+            "type": "number",
+            "title": "Climate Adjustment Points",
+            "default": 0.0
           },
           "waterfall": {
             "items": {
@@ -4700,6 +5801,22 @@
                 "type": "null"
               }
             ]
+          },
+          "climate_match": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Climate Match"
+          },
+          "climate_adjustment_points": {
+            "type": "number",
+            "title": "Climate Adjustment Points",
+            "default": 0.0
           }
         },
         "type": "object",
@@ -4792,6 +5909,22 @@
           "result_id": {
             "type": "integer",
             "title": "Result Id"
+          },
+          "climate_match": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Climate Match"
+          },
+          "climate_adjustment_points": {
+            "type": "number",
+            "title": "Climate Adjustment Points",
+            "default": 0.0
           }
         },
         "type": "object",
@@ -5005,6 +6138,43 @@
             "title": "Climate Sensitivity",
             "description": "Климатическая чувствительность",
             "default": "mid"
+          },
+          "desired_climate": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ClimateRange"
+                },
+                "propertyNames": {
+                  "enum": [
+                    "winter",
+                    "spring",
+                    "summer",
+                    "autumn"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desired Climate",
+            "description": "Желаемые сезонные температура и, при необходимости, влажность"
+          },
+          "climate_match_min": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Climate Match Min",
+            "description": "Минимальное совпадение с предпочтениями"
           },
           "territory_types": {
             "type": "string",
@@ -5865,6 +7035,204 @@
         ],
         "title": "V1Scope"
       },
+      "V1SettlementDetail": {
+        "properties": {
+          "settlement": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Settlement"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "features": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "ambulance": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ambulance"
+          },
+          "ambulance_status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "no_estimate",
+              "not_computed"
+            ],
+            "title": "Ambulance Status"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "settlement",
+          "index",
+          "features",
+          "ambulance",
+          "ambulance_status",
+          "meta"
+        ],
+        "title": "V1SettlementDetail"
+      },
+      "V1SettlementMatch": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "cluster_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Code"
+          },
+          "municipality_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipality Id"
+          },
+          "municipality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipality"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Code"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Population"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "cluster_code",
+          "municipality_id",
+          "municipality",
+          "region_code",
+          "region",
+          "population"
+        ],
+        "title": "V1SettlementMatch"
+      },
+      "V1SettlementSearch": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/V1SettlementMatch"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "V1SettlementSearch"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -5995,6 +7363,12 @@
               }
             ],
             "title": "Typical Text"
+          },
+          "display_in_bar_chart": {
+            "type": "boolean",
+            "title": "Display In Bar Chart",
+            "description": "Фронтенд: климатические компоненты S6 показывать в паспорте, не в зелёных полосах",
+            "default": true
           }
         },
         "type": "object",
@@ -6282,6 +7656,10 @@
     {
       "name": "index",
       "description": "Индекс доступности под профиль"
+    },
+    {
+      "name": "climate",
+      "description": "Условия по сетке NASA POWER за 2025 год"
     },
     {
       "name": "explain",
