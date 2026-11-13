@@ -1,0 +1,177 @@
+# Tests the backend, builds both Docker images and pushes them to Docker Hub:
+#   kekishev/case-championship-backend, kekishev/case-championship-frontend
+# Pull requests only build (nothing is pushed). A push to main publishes :latest, :main and :sha-<commit>;
+# a tag like v1.2.0 publishes :1.2.0 and :1.2. Repository settings (Settings -> Secrets and variables ->
+# Actions): variable DOCKERHUB_USERNAME and secret DOCKERHUB_TOKEN (a Docker Hub access token with
+# Read & Write access). Optional deploy after a push to main, when the variable DEPLOY_HOST is set:
+# variables DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH and secrets DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS.
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseded pull request runs are cancelled; runs on main finish, so a deploy is never cut in half.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  BACKEND_IMAGE: kekishev/case-championship-backend
+  FRONTEND_IMAGE: kekishev/case-championship-frontend
+
+jobs:
+  backend-unit:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest tests/unit -q
+
+  # Runs next to the image builds and does not block publishing yet: once it is green on GitHub,
+  # add it to `needs` of backend-image.
+  backend-integration:
+    name: Backend integration tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+        shell: bash
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://atlas:atlas@localhost:5432/atlas_test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Start PostgreSQL with PostGIS and pgvector
+        run: |
+          docker build -t atlas-db docker/db
+          docker run -d --name atlas-db -p 5432:5432 \
+            -e POSTGRES_USER=atlas -e POSTGRES_PASSWORD=atlas -e POSTGRES_DB=atlas atlas-db
+          # Over TCP: the server that runs the init scripts (atlas_test) listens on a socket only.
+          for _ in $(seq 60); do
+            docker exec atlas-db pg_isready -h 127.0.0.1 -U atlas -d atlas_test && exit 0
+            sleep 2
+          done
+          docker logs atlas-db
+          exit 1
+      - run: pip install -e ".[dev]"
+      - name: Run the integration tests
+        run: |
+          python -m pytest tests/integration -q -rs | tee pytest.log
+          # The suite skips itself without a database; here that is a failure, not a pass.
+          ! grep -E "TEST_DATABASE_URL is not configured|test database unreachable|ML data folder" pytest.log
+
+  backend-image:
+    name: Backend image
+    needs: backend-unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Sign in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      - uses: docker/build-push-action@v7
+        with:
+          context: backend
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max,ignore-error=true
+
+  frontend-image:
+    name: Frontend image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Sign in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      - uses: docker/build-push-action@v7
+        with:
+          context: web
+          # The browser calls the API on the same origin under /api (Caddy in docker-compose.yml),
+          # so this one image works on any address.
+          build-args: NEXT_PUBLIC_API_URL=/api
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max,ignore-error=true
+
+  deploy:
+    name: Deploy to the server
+    needs: [backend-image, frontend-image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    steps:
+      - name: Pull the new images and restart the app
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          TARGET: ${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}
+          APP_DIR: ${{ vars.DEPLOY_PATH }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes "$TARGET" \
+            "cd '$APP_DIR' && git pull --ff-only && docker compose pull api web && docker compose up -d"

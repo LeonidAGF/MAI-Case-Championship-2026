@@ -6,3 +6,6 @@ __pycache__/
 *.egg-info/
 .env
 .cache/
+
+# VPN egress config for docker-compose.vpn.yml: holds a private key
+secrets/

@@ -388,6 +388,12 @@ async def cmd_chat_check(_: argparse.Namespace) -> Any:
     return await llm.check(get_settings())
 
 
+async def cmd_egress_check(_: argparse.Namespace) -> Any:
+    from app.chat import llm
+
+    return await llm.egress_check(get_settings())
+
+
 async def cmd_chat_eval(args: argparse.Namespace) -> Any:
     import yaml
 
@@ -550,6 +556,7 @@ def build_parser() -> argparse.ArgumentParser:
     oa = sub.add_parser("export-openapi", help="write the OpenAPI contract for the frontend")
     oa.add_argument("--out", default=str(BACKEND_DIR / "openapi.json"))
     sub.add_parser("chat-check", help="chat LLM (Anthropic): key, network, model availability (free call only)")
+    sub.add_parser("egress-check", help="public IP and country of this server: direct and through LLM_PROXY_URL (VPN)")
     ce = sub.add_parser("chat-eval", help="10 control questions: grounding check (calls the LLM API)")
     ce.add_argument("--questions", default=str(BACKEND_DIR / "app" / "chat" / "control_questions.yaml"))
     ce.add_argument("--yes", action="store_true")
@@ -585,6 +592,7 @@ ASYNC_COMMANDS = {
     "order-list": cmd_order_list,
     "coverage": cmd_coverage,
     "chat-check": cmd_chat_check,
+    "egress-check": cmd_egress_check,
     "chat-eval": cmd_chat_eval,
 }
 
@@ -608,6 +616,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "chat-eval" and not result.get("passed"):
         return 1
     if args.command == "chat-check" and not result.get("ok"):
+        return 1
+    if args.command == "egress-check" and result.get("tunneled") is False:
         return 1
     return 0
 

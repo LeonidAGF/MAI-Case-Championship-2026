@@ -19,17 +19,19 @@ docs are [README.md](README.md) (Russian, more detail on ETL formats and monitor
 
 ## Commands
 
-Run from `backend/`.
+Run `docker compose` from the repository root (one `docker-compose.yml` for the whole app) and
+`python` from `backend/`.
 
 | Task | Command |
 |---|---|
-| Full stack: db, redis, api, monitoring | `docker compose up -d --build` |
+| Whole app: Caddy, web, api, db, redis, monitoring (the root `.env` holds the site login, passwords, ports) | `docker compose up -d --build` |
 | Reference tables, territories, OSM objects and features, chat knowledge (idempotent) | `docker compose run --rm api python -m app.cli seed` |
 | Only the OSM objects and features (removes leftover synthetic values) | `docker compose run --rm api python -m app.cli seed-osm` |
 | Ambulance travel times to all settlements (after `seed`; ~20 s, peak ~2.5 GB RAM) | `docker compose run --rm api python -m app.cli load-ambulance` |
 | Add missing SRTM tiles to `data/srtm` (on the host: Docker mounts it read-only) | `python -m app.cli fetch-srtm` |
 | Organisations, API keys, payment orders of the /v1 data API (team only) | `python -m app.cli org-add`, `key-issue`, `order-create`, … (`--help`) |
 | Check the chat key, network and model (free) | `docker compose run --rm api python -m app.cli chat-check` |
+| Chat through the VPN tunnel (AmneziaWG sidecar, needs `backend/secrets/awg0.conf`) | `COMPOSE_PROFILES=vpn` and `LLM_PROXY_URL=http://vpn-egress:8888` in the root `.env`, `docker compose up -d --build`, then `docker compose exec api python -m app.cli egress-check` |
 | Only DB and Redis (for a local API or tests) | `docker compose up -d db redis` |
 | Local install | `python -m venv .venv`, activate (`.venv\Scripts\Activate.ps1` or `source .venv/bin/activate`), `pip install -e ".[dev]"` |
 | Local API | `python -m app.cli migrate`, then `uvicorn app.main:app --reload` |
@@ -256,13 +258,23 @@ example and expects affected > 0 and monotonic deltas.
 ## Gotchas
 
 - `backend/.env` contains the Anthropic key (`ANTHROPIC_API_KEY`). Don't print, copy or commit it.
-  Organisation API keys (`pulse_…`) are secrets too.
+  Organisation API keys (`pulse_…`) are secrets too, and so is `backend/secrets/awg0.conf` (the VPN
+  private key for the `vpn` compose profile).
+- `LLM_PROXY_URL` is used by the Anthropic client only (`app/chat/llm.py`). Don't route other traffic
+  through it. The tunnel is for demonstrating VPN egress: the server and the VPS must both be in
+  countries where Anthropic's API is available.
 - The chat model is `LLM_MODEL` (default `claude-sonnet-5-5`) at `LLM_EFFORT` (default `medium`);
   `claude-haiku-5-5` is faster and cheaper and gets no refusal fallback. Requests are not streamed
   (the answer is checked for invented numbers before the user sees it), so keep `LLM_MAX_TOKENS` ≤ 20000.
 - `chat-eval` calls the paid Anthropic API: run it only when the user explicitly asks. `chat-check`
   is free (it only reads the model's description).
 - `docker compose restart` doesn't reload `.env`. Use `docker compose up -d api`.
+- Compose reads the root `.env` (ports, passwords, `IMAGE_TAG`, `COMPOSE_PROFILES`, `LLM_PROXY_URL`).
+  `backend/.env` is the api's `env_file`, and the compose `environment` overrides it (`DATABASE_URL`,
+  `REDIS_URL`, the data folders, `TRUST_FORWARDED_FOR`, `LLM_PROXY_URL`).
+- In Docker the API sits behind Caddy under `/api`: Caddy strips the prefix and
+  `UVICORN_ROOT_PATH=/api` adds it back. Use http://localhost/api/docs; `http://localhost:8000/docs`
+  doesn't load its schema, while other direct `:8000` requests (`/healthz`, `/metrics`) work.
 - The territory table holds all three levels. `is_scored` is true only for settlements; `parent_id`
   goes settlement → municipality → region; every level has `region_code` (RU-DA, RU-IN, RU-KB,
   RU-KC, RU-SE, RU-CE, RU-STA).

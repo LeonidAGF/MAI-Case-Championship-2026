@@ -1,0 +1,5 @@
+# Hosts the API may reach through the tunnel: POSIX basic regular expressions matched against the
+# host name, one per line. FilterDefaultDeny in tinyproxy.conf refuses everything else.
+^api\.anthropic\.com$
+# Shows the exit IP and country for `python -m app.cli egress-check`.
+^www\.cloudflare\.com$

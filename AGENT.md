@@ -45,11 +45,14 @@ OSM, statistics ──► ML (scripts/) ──► data/, graph/, clast/, ml_resu
                                         ▼
 browser ◄── web (Next.js) ◄── HTTP/JSON ──► backend (FastAPI) ──► PostgreSQL + PostGIS + pgvector
                                               │                    Redis (cache, rate limits)
-                                              ├── Anthropic API: Claude (chat, optional)
+                                              ├── Anthropic API: Claude (chat, optional; can go
+                                              │   through the AmneziaWG sidecar, LLM_PROXY_URL)
                                               └── OSRM (exact what-if, not connected yet)
 ```
 
 - The frontend talks only to the backend API (`NEXT_PUBLIC_API_URL`, default `http://localhost:8000`).
+  In Docker, Caddy (`deploy/Caddyfile`) is the only public entry: `/` goes to the frontend and `/api`
+  to the backend, and the frontend image is built with `NEXT_PUBLIC_API_URL=/api`.
 - The backend computes the index itself with a built-in reference engine. ML plugs its model in
   through a YAML config and an optional `IndexEngine` class, without backend code changes.
 - The data is **real**: 18 of the 30 features (F01–F17, F21) are computed from OpenStreetMap on the
@@ -83,15 +86,17 @@ browser ◄── web (Next.js) ◄── HTTP/JSON ──► backend (FastAPI) 
 ## Quick start
 
 ```bash
-cd backend
-cp .env.example .env               # only if backend/.env does not exist yet
-docker compose up -d --build       # db, redis, api (migrations run on start), monitoring
+cp .env.example .env                  # compose settings: site address, login (BASIC_AUTH_*), passwords, ports
+cp backend/.env.example backend/.env  # API settings; only if backend/.env does not exist yet
+docker compose up -d --build          # caddy, web, api (migrations run on start), db, redis, monitoring
 docker compose run --rm api python -m app.cli seed   # territories + real OSM features + chat knowledge
-cd ../web && npm install && npm run dev               # http://localhost:3000
+cd web && npm install && npm run dev  # optional: the frontend with hot reload on http://localhost:3000
 ```
 
-The API is at http://localhost:8000 (Swagger at `/docs`, health at `/healthz`) and Grafana at
-http://localhost:3001.
+The site is at http://localhost (Caddy with the login from the root `.env`; Swagger at
+`/api/docs`). The API also listens on http://localhost:8000 for local use (health at `/healthz`),
+and Grafana on http://localhost:3001. CI (`.github/workflows/ci-cd.yml`) tests the backend and
+builds both images; a push to `main` publishes them to Docker Hub.
 
 ## Rules for every change
 
@@ -99,7 +104,7 @@ http://localhost:3001.
   `ml_results/`, `geo-embeddings/data/`. The backend only reads `data/`, the OSM CSV files in
   `geo-embeddings/data/` and, in `load-ambulance`, the road graph in `graph/`.
 - **Secrets.** `backend/.env` holds the Anthropic API key. Never print it, copy it into other files or
-  commit it. Organisation API keys (`pulse_…`) are secrets too: the database keeps only their hashes. `.env*` is gitignored, but `backend/.env.example` is tracked, so keep it secret-free.
+  commit it. Organisation API keys (`pulse_…`) are secrets too: the database keeps only their hashes. `backend/secrets/awg0.conf` (VPN egress) holds a private key and is gitignored too. `.env*` is gitignored, but `backend/.env.example` is tracked, so keep it secret-free.
 - **Paid calls.** `python -m app.cli chat-eval` and anything else that calls the Anthropic API costs
   money. Run them only when the user asks. `chat-check` is free.
 - **Real data only.** The product loads real data; synthetic values exist only in the integration

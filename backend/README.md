@@ -25,24 +25,28 @@ ML-часть бэкенд не меняет. Файлы ML в `../data`, `../gr
 
 ### 1. Бэкенд
 
-Команды одинаково работают в PowerShell и bash. Здесь и дальше команды `docker compose` и
+Команды одинаково работают в PowerShell и bash. Здесь и дальше команды `docker compose`
+выполняются из корня репозитория: общий `docker-compose.yml` поднимает всё приложение. Команды
 `python` выполняются из папки `backend`.
 
-Если файл `backend/.env` уже есть, не копируйте его заново: в нём могут быть ваши порты и ключ
-Anthropic API. Перенесите из `.env.example` только недостающие переменные.
+Если файл `backend/.env` уже есть, не копируйте его заново: в нём может быть ключ Anthropic API.
+Перенесите из `.env.example` только недостающие переменные. Адрес сайта, логин, пароли и порты
+стека лежат в `.env` в корне репозитория (см. [README.md](../README.md#быстрый-старт)).
 
 ```bash
-cd backend
-cp .env.example .env              # настройки и порты
-docker compose up -d --build      # база, Redis, API и мониторинг
+cp .env.example .env                   # в корне: адрес сайта, логин, пароли и порты
+cp backend/.env.example backend/.env   # настройки API и ключ Anthropic
+docker compose up -d --build      # Caddy, фронтенд, API, база, Redis и мониторинг
 docker compose run --rm api python -m app.cli seed   # справочники, территории, реальные данные OSM, база знаний чата
 docker compose run --rm api python -m app.cli load-ambulance   # время доезда скорой до всех НП (~20 с)
 ```
 
 Что делают эти команды:
 
-- `up` собирает образы и запускает PostgreSQL 16 (с PostGIS и pgvector), Redis, API и
-  мониторинг (Prometheus, Grafana, Loki, Alloy). При старте API сам применяет миграции базы.
+- `up` собирает образы и запускает Caddy, фронтенд, PostgreSQL 16 (с PostGIS и pgvector), Redis,
+  API и мониторинг (Prometheus, Grafana, Loki, Alloy). При старте API сам применяет миграции базы.
+  В Docker API работает за Caddy по пути `/api`: сайт — http://localhost, документация —
+  http://localhost/api/docs.
 - `seed` загружает справочники, 7 субъектов, 144 района и 3403 населённых пункта (НП), объекты
   и признаки из OpenStreetMap (`geo-embeddings/data`, см. [Данные](#данные)) и базу знаний чата.
   Синтетические значения от старых версий удаляются. Команду можно запускать повторно,
@@ -53,7 +57,8 @@ docker compose run --rm api python -m app.cli load-ambulance   # время до
 
 ### 2. Фронтенд
 
-Во втором терминале, из корня репозитория:
+Фронтенд уже работает в Docker. Для разработки с горячей перезагрузкой запустите его отдельно,
+во втором терминале, из корня репозитория:
 
 ```bash
 cd web
@@ -69,18 +74,18 @@ npm run dev    # приложение на http://localhost:3000
 
 | Что                        | Адрес                         | Примечание                                             |
 |----------------------------|-------------------------------|--------------------------------------------------------|
-| Веб-приложение             | http://localhost:3000         | после `npm run dev`                                    |
-| Документация API (Swagger) | http://localhost:8000/docs    | контракт также лежит в `openapi.json`                  |
+| Веб-приложение             | http://localhost              | через Caddy, с логином из `.env`; при `npm run dev` — http://localhost:3000 |
+| Документация API (Swagger) | http://localhost/api/docs     | контракт также лежит в `openapi.json`                  |
 | Состояние API              | http://localhost:8000/healthz | поле `feature_data` показывает, какие данные загружены |
 | Grafana                    | http://localhost:3001         | логин `admin`, пароль из `GRAFANA_ADMIN_PASSWORD`      |
 | Prometheus                 | http://localhost:9090         |                                                        |
 | Loki                       | http://localhost:3100/ready   | должен ответить `ready`                                |
-| PostgreSQL                 | `localhost:5432`              | пользователь, пароль и база — `atlas`                  |
+| PostgreSQL                 | `localhost:5432`              | пользователь и база — `atlas`, пароль из `POSTGRES_PASSWORD` (по умолчанию `atlas`) |
 | Redis                      | `localhost:6379`              |                                                        |
 
-Порты меняются в `backend/.env`: `API_PORT`, `DB_PORT`, `REDIS_PORT`, `GRAFANA_PORT`,
-`PROMETHEUS_PORT`, `LOKI_PORT`. Grafana работает на 3001, потому что порт 3000 занимает фронтенд.
-Grafana, Prometheus и Loki слушают только `127.0.0.1`: мониторинг рассчитан на локальный показ.
+Порты меняются в `.env` в корне репозитория: `API_PORT`, `DB_PORT`, `REDIS_PORT`, `GRAFANA_PORT`,
+`PROMETHEUS_PORT`, `LOKI_PORT`. Все они слушают только `127.0.0.1`, снаружи доступен только сайт
+(Caddy, порты 80 и 443). Grafana работает на 3001, потому что порт 3000 занимает `npm run dev`.
 
 ### Включить чат
 
@@ -91,7 +96,8 @@ API командой `docker compose up -d api`. Команда `docker compose 
 
 ### Без Docker (только API)
 
-Нужны Python 3.12+ и запущенные база и Redis, например `docker compose up -d db redis`.
+Нужны Python 3.12+ и запущенные база и Redis, например `docker compose up -d db redis` из корня
+репозитория.
 
 ```bash
 python -m venv .venv
@@ -479,6 +485,63 @@ tests/              unit- и интеграционные тесты
 **Контрольные вопросы.** `python -m app.cli chat-eval --yes` прогоняет 10 вопросов и проверяет
 числа в ответах. Команда платная: она вызывает Anthropic API.
 
+### Выход к Anthropic через VPN
+
+Запросы чата к Anthropic можно пустить через туннель AmneziaWG до своего VPS. Пользователи
+по-прежнему подключаются к API напрямую, и остальные исходящие запросы (SRTM, OSRM) идут мимо
+туннеля: прокси использует только клиент Anthropic.
+
+```
+пользователи ──► Caddy ──► api ──► интернет напрямую (всё, кроме запросов к LLM)
+                            │
+                            │ только клиент Anthropic: LLM_PROXY_URL=http://vpn-egress:8888
+                            ▼
+                      vpn-egress: tinyproxy ──► awg0 ══ AmneziaWG ══► VPS ──► api.anthropic.com
+```
+
+Сервер и VPS должны находиться в странах, где Anthropic API доступен. Туннель не меняет того,
+откуда приходят пользователи, и не предназначен для обхода региональных ограничений.
+
+1. В приложении Amnezia выгрузите конфигурацию подключения в нативном формате AmneziaWG (файл
+   `.conf` с разделами `[Interface]` и `[Peer]`, а не ключ `vpn://`) и сохраните её как
+   `backend/secrets/awg0.conf`. В файле лежит закрытый ключ, поэтому папка `secrets/` в git не
+   попадает.
+2. В `.env` в корне репозитория раскомментируйте две строки: профиль `vpn` запускает контейнер
+   `vpn-egress`, а `LLM_PROXY_URL` направляет в него клиент Anthropic.
+
+   ```
+   COMPOSE_PROFILES=vpn
+   LLM_PROXY_URL=http://vpn-egress:8888
+   ```
+
+   Затем пересоздайте стек: `docker compose up -d --build`.
+3. Проверьте туннель:
+
+   ```bash
+   docker compose logs vpn-egress                           # "tunnel awg0 is up", затем CONNECT api.anthropic.com:443 на каждый запрос чата
+   docker compose exec vpn-egress awg show                  # рукопожатие с VPS и счётчики трафика
+   docker compose exec api python -m app.cli egress-check   # IP и страна: direct — сервер, via_proxy — VPS, "tunneled": true
+   docker compose exec api python -m app.cli chat-check     # "egress": "proxy http://vpn-egress:8888"
+   ```
+
+   `GET /api/healthz` тоже показывает выход чата: `enabled (…, via proxy http://vpn-egress:8888)`.
+
+**Как это устроено.** Контейнер `vpn-egress` ([docker/vpn-egress](docker/vpn-egress/)) поднимает
+туннель без `awg-quick`, отдельными командами из [entrypoint.sh](docker/vpn-egress/entrypoint.sh).
+`amneziawg-go` создаёт интерфейс `awg0` в userspace, поэтому модуль ядра на хосте не нужен.
+`awg setconf` загружает ключи, пира и параметры обфускации AmneziaWG, а адрес, MTU, маршруты и DNS
+задаются через `ip`. Маршрут по умолчанию внутри контейнера ведёт в туннель, мимо него идут только
+пакеты к самому VPS и трафик сети compose. Если туннель упал, запросы к Anthropic не уходят в обход:
+чат отвечает `llm_unavailable`, а остальной API работает. Контейнеру нужны только `NET_ADMIN` и
+`/dev/net/tun`, маршруты хоста не меняются, порт прокси наружу не публикуется. tinyproxy пропускает
+только HTTPS к хостам из [allowed-hosts](docker/vpn-egress/allowed-hosts): `api.anthropic.com` и
+`www.cloudflare.com` (для `egress-check`).
+
+**Ограничения.** Endpoint в конфигурации должен быть IPv4-адресом или именем с IPv4-адресом.
+`AllowedIPs` должен покрывать адреса назначения (значение Amnezia по умолчанию `0.0.0.0/0`
+подходит). Версии `amneziawg-go` и `amneziawg-tools` закреплены в
+[Dockerfile](docker/vpn-egress/Dockerfile).
+
 ### База знаний и RAG
 
 Кроме функций, чат опирается на базу знаний: фрагменты методики и проверенные материалы команды.
@@ -575,6 +638,7 @@ JSONL, один объект на строку. Обязательное пол�
 | `coverage`                                                                             | отчёт о полноте (то же, что `GET /data/coverage`): заполненность признаков по субъектам, POI, сверка с `seeds/official_poi_counts.csv`                           |
 | `export-openapi`                                                                       | обновить `openapi.json`                                                                                                                                          |
 | `chat-check`, `chat-eval`                                                              | проверка подключения чата и контрольные вопросы                                                                                                                  |
+| `egress-check` | IP и страна, под которыми сервер виден снаружи: напрямую и через `LLM_PROXY_URL` (см. [Выход к Anthropic через VPN](#выход-к-anthropic-через-vpn)) |
 
 **Кластеры** (раздел 4.1 отчёта):
 

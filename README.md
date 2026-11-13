@@ -18,6 +18,7 @@
 - [Бэкенд: API, сценарии, чат и RAG](#бэкенд-api-сценарии-чат-и-rag)
 - [Мониторинг](#мониторинг)
 - [Тесты](#тесты)
+- [Развёртывание на сервере и CI/CD](#развёртывание-на-сервере-и-cicd)
 - [Если что-то не работает](#если-что-то-не-работает)
 - [Статус и ограничения](#статус-и-ограничения)
 - [Планы развития](#планы-развития)
@@ -69,6 +70,9 @@ data/         населённые пункты, муниципалитеты и
 ml_results/   рассчитанные метрики и индексы
 scripts/      построение графа и расчётные алгоритмы
 docs/         документы проекта
+deploy/       Caddyfile: вход на сайт, HTTPS, маршрут /api к бэкенду
+.github/      CI/CD: тесты, сборка образов и публикация в Docker Hub
+docker-compose.yml   всё приложение: Caddy, фронтенд, API, база, Redis, мониторинг, VPN-туннель
 ```
 
 Подробности: [backend/README.md](backend/README.md) (бэкенд) и [README_ML.md](README_ML.md) (ML-часть).
@@ -81,29 +85,32 @@ docs/         документы проекта
 - Node.js 20.9 или новее: для фронтенда;
 - Python 3.12 или новее: только для запуска API без Docker и для тестов.
 
-### 1. Бэкенд
+### 1. Приложение в Docker
 
-Команды одинаково работают в PowerShell и в bash. Все команды `docker compose` и `python` ниже запускайте из папки `backend`.
+Команды одинаково работают в PowerShell и в bash. Все команды `docker compose` запускайте из корня репозитория: один файл `docker-compose.yml` поднимает всё приложение. Команды `python` запускайте из папки `backend`.
 
-Если файл `backend/.env` уже есть, не копируйте его заново: в нём могут быть ваши порты и ключ Anthropic API. Перенесите из `.env.example` только недостающие переменные.
+Настройки лежат в двух файлах. В `.env` в корне репозитория — адрес сайта, логин, пароли и порты. В `backend/.env` — настройки API и ключ Anthropic. Если `backend/.env` уже есть, не копируйте его заново, а перенесите из `backend/.env.example` только недостающие переменные.
 
 ```bash
-cd backend
-cp .env.example .env              # настройки и порты
-docker compose up -d --build      # база, Redis, API и мониторинг
+cp .env.example .env                   # адрес сайта, логин, пароли и порты
+cp backend/.env.example backend/.env   # настройки API и ключ Anthropic
+docker run --rm caddy:2.11-alpine caddy hash-password --plaintext 'ваш-пароль'   # хеш -> BASIC_AUTH_HASH в .env, в одинарных кавычках
+docker compose up -d --build           # Caddy, фронтенд, API, база, Redis и мониторинг
 docker compose run --rm api python -m app.cli seed   # справочники, территории, реальные данные OSM, база знаний чата
 docker compose run --rm api python -m app.cli load-ambulance   # время доезда скорой до всех населённых пунктов (~20 с)
 ```
 
 Что делают команды:
 
-- `up` собирает образы и запускает PostgreSQL 16 (с PostGIS и pgvector), Redis, API и мониторинг. При старте API сам применяет миграции базы.
+- `up` собирает образы и запускает Caddy (вход на сайт по логину, HTTPS для домена), фронтенд, API, PostgreSQL 16 (с PostGIS и pgvector), Redis и мониторинг. При старте API сам применяет миграции базы. Вместо сборки можно взять готовые образы из CI: `docker compose pull api web`, затем `docker compose up -d`.
 - `seed` загружает справочники, 7 субъектов, 144 района и 3 403 населённых пункта, объекты и признаки из OpenStreetMap (`geo-embeddings/data/osm_poi.csv` и `osm_features.csv`) и базу знаний чата. Синтетические значения, оставшиеся от старых версий, удаляются. Команду можно запускать повторно, дубликатов не будет.
 - `load-ambulance` считает время доезда скорой до каждого населённого пункта по дорожному графу ML (`graph/`, Git LFS) и рельефу SRTM, плитки которого лежат в `backend/data/srtm`. Подробности — в разделе «Время доезда скорой помощи» файла [backend/README.md](backend/README.md).
 
-### 2. Фронтенд
+Сайт открывается на http://localhost: логин — `BASIC_AUTH_USER`, пароль — тот, из которого сделан `BASIC_AUTH_HASH`. Браузер обращается к API по тому же адресу, по пути `/api`.
 
-Во втором терминале, из корня репозитория:
+### 2. Фронтенд в режиме разработки
+
+Фронтенд уже работает в Docker. Чтобы править его с горячей перезагрузкой, запустите его отдельно во втором терминале, из корня репозитория:
 
 ```bash
 cd web
@@ -117,16 +124,16 @@ npm run dev    # приложение на http://localhost:3000
 
 | Что | Адрес | Примечание |
 |---|---|---|
-| Веб-приложение | http://localhost:3000 | после `npm run dev` |
-| Документация API (Swagger) | http://localhost:8000/docs | контракт также в `backend/openapi.json` |
+| Веб-приложение | http://localhost | через Caddy, с логином из `.env`; при `npm run dev` — http://localhost:3000 |
+| Документация API (Swagger) | http://localhost/api/docs | контракт также в `backend/openapi.json` |
 | Состояние API | http://localhost:8000/healthz | поле `feature_data` показывает, какие данные загружены |
 | Grafana | http://localhost:3001 | логин `admin`, пароль из `GRAFANA_ADMIN_PASSWORD` |
 | Prometheus | http://localhost:9090 | |
 | Loki | http://localhost:3100/ready | должен ответить `ready` |
-| PostgreSQL | `localhost:5432` | пользователь, пароль и база: `atlas` |
+| PostgreSQL | `localhost:5432` | пользователь и база `atlas`, пароль из `POSTGRES_PASSWORD` (по умолчанию `atlas`) |
 | Redis | `localhost:6379` | |
 
-Порты меняются в `backend/.env`: `API_PORT`, `DB_PORT`, `REDIS_PORT`, `GRAFANA_PORT`, `PROMETHEUS_PORT`, `LOKI_PORT`. Grafana работает на порту 3001, потому что порт 3000 занимает фронтенд. Grafana, Prometheus и Loki слушают только `127.0.0.1`: мониторинг рассчитан на локальный показ.
+Порты меняются в `.env` в корне репозитория: `API_PORT`, `DB_PORT`, `REDIS_PORT`, `GRAFANA_PORT`, `PROMETHEUS_PORT`, `LOKI_PORT`. Все они слушают только `127.0.0.1`, а снаружи доступен только сайт на портах 80 и 443. Grafana работает на порту 3001, потому что порт 3000 занимает фронтенд при `npm run dev`.
 
 ### Остановка
 
@@ -137,7 +144,7 @@ docker compose down -v    # остановить и удалить все дан
 
 ### Запуск только API без Docker
 
-Нужны Python 3.12+ и запущенные база с Redis (например, `docker compose up -d db redis`).
+Нужны Python 3.12+ и запущенные база с Redis (например, `docker compose up -d db redis` из корня репозитория).
 
 ```bash
 python -m venv .venv
@@ -332,7 +339,7 @@ pytest tests/unit -q    # без базы данных
 pytest tests -q         # вместе с интеграционными, нужен TEST_DATABASE_URL
 ```
 
-Для интеграционных тестов `docker compose` заранее создаёт базу `atlas_test`. Укажите её в `backend/.env`:
+Для интеграционных тестов контейнер базы (`docker compose up -d db` из корня репозитория) при первом запуске создаёт и базу `atlas_test`. Укажите её в `backend/.env`, с паролем из `POSTGRES_PASSWORD` (по умолчанию `atlas`):
 
 ```text
 TEST_DATABASE_URL=postgresql+asyncpg://atlas:atlas@localhost:5432/atlas_test
@@ -340,17 +347,59 @@ TEST_DATABASE_URL=postgresql+asyncpg://atlas:atlas@localhost:5432/atlas_test
 
 Интеграционные тесты пересоздают схему, проверяют, что миграция совпадает с моделями, загружают реальные территории ML и прогоняют API, ETL и чат. Вместо Claude чат использует подставной клиент, поэтому сеть не нужна и токены не тратятся. Отдельные модули проверяют загрузку реальных данных OSM и время доезда скорой на реальном дорожном графе и рельефе SRTM. На 13.11.2026 проходят все 161 тест: 112 unit и 49 интеграционных.
 
+## Развёртывание на сервере и CI/CD
+
+На сервере нужны Docker Engine с Compose v2 и Git LFS (дорожный граф для `load-ambulance`).
+
+```bash
+git clone <адрес репозитория> atlas && cd atlas && git lfs pull
+cp .env.example .env                   # SITE_ADDRESS, PUBLIC_URL, BASIC_AUTH_*, POSTGRES_PASSWORD, GRAFANA_ADMIN_PASSWORD
+cp backend/.env.example backend/.env   # ANTHROPIC_API_KEY и другие настройки API
+docker compose pull api web            # образы из Docker Hub; без CI: docker compose up -d --build
+docker compose up -d
+docker compose run --rm api python -m app.cli seed
+docker compose run --rm api python -m app.cli load-ambulance
+```
+
+- Снаружи открыты только порты 80 и 443 (Caddy). Если в `SITE_ADDRESS` указан домен, направленный на сервер, Caddy сам получит сертификат Let's Encrypt. С `SITE_ADDRESS=:80` сайт работает по HTTP, и пароль передаётся без шифрования.
+- Сайт и API закрыты одним логином (`BASIC_AUTH_USER`, `BASIC_AUTH_HASH`). Без него Caddy не запускается, поэтому сайт не окажется открытым по ошибке.
+- API, база, Redis и мониторинг слушают только `127.0.0.1`. Grafana с вашего компьютера: `ssh -L 3001:127.0.0.1:3001 <пользователь>@<сервер>`, затем http://localhost:3001.
+- Чат через VPN-туннель: в `.env` раскомментируйте `COMPOSE_PROFILES=vpn` и `LLM_PROXY_URL=http://vpn-egress:8888` и положите конфигурацию AmneziaWG в `backend/secrets/awg0.conf` (подробнее — в [backend/README.md](backend/README.md#выход-к-anthropic-через-vpn)).
+
+**CI/CD.** Workflow [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml):
+
+| Событие | Что происходит |
+|---|---|
+| pull request | unit- и интеграционные тесты бэкенда, сборка обоих образов без публикации |
+| push в `main` | то же, затем публикация образов `kekishev/case-championship-backend` и `kekishev/case-championship-frontend` в Docker Hub с тегами `latest`, `main` и `sha-<коммит>`, затем деплой, если он настроен |
+| тег `v1.2.0` | образы с тегами `1.2.0` и `1.2` |
+
+Образ бэкенда публикуется, только если прошли unit-тесты. Интеграционные тесты идут параллельно на PostgreSQL с PostGIS и pgvector, который поднимается в CI, и пока не блокируют публикацию: когда они станут зелёными на GitHub, добавьте `backend-integration` в `needs` задачи `backend-image`. Фронтенд собирается с `NEXT_PUBLIC_API_URL=/api`, поэтому один образ работает на любом адресе.
+
+Настройки репозитория (Settings → Secrets and variables → Actions):
+
+| Имя | Тип | Значение |
+|---|---|---|
+| `DOCKERHUB_USERNAME` | variable | логин Docker Hub |
+| `DOCKERHUB_TOKEN` | secret | токен доступа Docker Hub с правами Read & Write |
+| `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH` | variables | сервер, пользователь и папка с репозиторием; без `DEPLOY_HOST` деплой пропускается |
+| `DEPLOY_SSH_KEY` | secret | закрытый SSH-ключ этого пользователя |
+| `DEPLOY_KNOWN_HOSTS` | secret | вывод `ssh-keyscan <сервер>` |
+
+Деплой заходит на сервер по SSH и выполняет `git pull --ff-only`, `docker compose pull api web` и `docker compose up -d`. Если репозитории в Docker Hub приватные, один раз выполните на сервере `docker login`.
+
 ## Если что-то не работает
 
 | Симптом | Что сделать |
 |---|---|
-| Порт уже занят | Поменяйте нужный `*_PORT` в `backend/.env` и выполните `docker compose up -d` |
+| Порт уже занят | Поменяйте нужный `*_PORT` в `.env` в корне репозитория и выполните `docker compose up -d` |
+| Сайт не открывается, Caddy не запускается | Задайте `BASIC_AUTH_USER` и `BASIC_AUTH_HASH` в `.env` (хеш в одинарных кавычках); причину покажет `docker compose logs caddy` |
 | Чат отвечает «Чат не настроен: нет ключа Anthropic API» | Добавьте `ANTHROPIC_API_KEY` в `backend/.env` и выполните `docker compose up -d api` |
 | Ошибка ключа или доступа (401, 403) в чате | `docker compose run --rm api python -m app.cli chat-check` покажет причину |
 | `/healthz` показывает `feature_data: empty` | Признаки не загружены: выполните `seed` (или `seed-osm`) |
 | Панели Grafana пустые | Откройте несколько страниц приложения и подождите |
 | Интеграционные тесты пропускаются | Не задан `TEST_DATABASE_URL` |
-| Фронтенд не видит API | Проверьте `NEXT_PUBLIC_API_URL` в `web/.env.local` и `CORS_ORIGINS` в `backend/.env` |
+| Фронтенд не видит API | В Docker фронтенд ходит в API через `/api` того же адреса. При `npm run dev` проверьте `NEXT_PUBLIC_API_URL` в `web/.env.local` и `CORS_ORIGINS` в `backend/.env` |
 
 ## Статус и ограничения
 
