@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import Settings
+from app.core.db_metrics import install_db_metrics
 
 
 def make_engine(settings: Settings, *, pool: bool = True) -> AsyncEngine:
@@ -13,7 +14,9 @@ def make_engine(settings: Settings, *, pool: bool = True) -> AsyncEngine:
         from sqlalchemy.pool import NullPool
 
         kwargs["poolclass"] = NullPool
-    return create_async_engine(settings.database_url, **kwargs)
+    engine = create_async_engine(settings.database_url, **kwargs)
+    install_db_metrics(engine.sync_engine)
+    return engine
 
 
 def make_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
