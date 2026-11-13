@@ -7,7 +7,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin", "cyrillic"] });
 
 export const metadata: Metadata = {
-	title: "Атлас доступности СКФО",
+	title: "Pulse Score",
 	description: "Индекс транспортной связанности",
 };
 

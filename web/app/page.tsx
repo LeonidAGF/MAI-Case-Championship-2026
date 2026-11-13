@@ -28,9 +28,10 @@ function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
 				
 				<nav className="flex flex-col p-4 gap-2">
 					<Link href="/" className="p-3 rounded-lg hover:bg-blue-50 text-blue-600 font-medium">Карта</Link>
+					<Link href="/climate" className="p-3 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">Климат</Link>
 					<Link href="/compare" className="p-3 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">Сравнить</Link>
 					<Link href="/whatif" className="p-3 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">Что если</Link>
-					<Link href="/whatif" className="p-3 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">API</Link>
+					<Link href="https://github.com/LeonidAGF/MAI-Case-Championship-2026" className="p-3 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">API</Link>
 					<Link href="https://cson.site:3001" target="_blank" rel="noopener noreferrer" className="p-3 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">Grafana</Link>
 				</nav>
 			</aside>

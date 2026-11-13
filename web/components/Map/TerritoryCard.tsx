@@ -4,21 +4,8 @@ import { useEffect, useState } from 'react';
 import { useAtlas } from '@/lib/store';
 import { 
 	fetchExplain, ExplainResponse, WaterfallStep,
-	fetchAmbulanceSettlement, AmbulanceSettlement, AmbulanceNormStatus
 } from '@/lib/api';
 import { FEATURE_LABELS } from '@/lib/dictionary';
-
-const NORM_LABEL: Record<AmbulanceNormStatus, string> = {
-	met: 'в нормативе',
-	borderline: 'на границе норматива',
-	not_met: 'дольше норматива',
-};
-
-const NORM_COLOR: Record<AmbulanceNormStatus, string> = {
-	met: 'bg-green-100 text-green-800',
-	borderline: 'bg-yellow-100 text-yellow-800',
-	not_met: 'bg-red-100 text-red-800',
-};
 
 export function TerritoryCard() {
 	const selectedTerritoryId = useAtlas((s) => s.selectedTerritoryId);
@@ -26,7 +13,6 @@ export function TerritoryCard() {
 	const profile = useAtlas((s) => s.profile);
 	
 	const [data, setData] = useState<ExplainResponse | null>(null);
-	const [ambulance, setAmbulance] = useState<AmbulanceSettlement | null>(null);
 
 	useEffect(() => {
 		if (selectedTerritoryId == null) {
@@ -45,18 +31,7 @@ export function TerritoryCard() {
 		return () => { cancelled = true; };
 	}, [selectedTerritoryId, profile]);
 
-	useEffect(() => {
-		if (selectedTerritoryId == null) return;
-		let cancelled = false;
-		fetchAmbulanceSettlement(selectedTerritoryId)
-			.then((a) => { if (!cancelled) setAmbulance(a); })
-			.catch(() => { if (!cancelled) setAmbulance(null); });
-		return () => { cancelled = true; };
-	}, [selectedTerritoryId]);
-
 	if (!data) return null;
-
-	const amb = ambulance?.territory_id === selectedTerritoryId ? ambulance : null;
 
 	return (
 		<aside className="absolute z-20 bg-white/95 backdrop-blur shadow-2xl border border-gray-100 overflow-y-auto transition-all
@@ -78,53 +53,6 @@ export function TerritoryCard() {
 			</div>
 
 			<Waterfall steps={data.waterfall} />
-
-			{amb && amb.available && amb.estimate && (
-				<div className="mt-6 pt-4 border-t border-gray-100">
-					<h3 className="text-sm font-semibold text-gray-800 mb-2">Скорая помощь</h3>
-					
-					<div className="flex items-baseline gap-2 mb-1">
-						<span className="text-3xl font-bold text-gray-900">
-							{amb.estimate.minutes < 1 ? '< 1' : Math.round(amb.estimate.minutes)}
-						</span>
-						<span className="text-sm font-medium text-gray-500">мин</span>
-					</div>
-					
-					<div className="text-xs text-gray-500 mb-2">
-						от {Math.round(amb.estimate.minutes_low)} до {Math.round(amb.estimate.minutes_high)} мин · время в пути
-					</div>
-
-					<div className={`inline-block px-2 py-1 rounded text-xs font-medium mb-3 ${NORM_COLOR[amb.estimate.norm_status]}`}>
-						{NORM_LABEL[amb.estimate.norm_status]} {amb.estimate.norm_minutes} мин
-					</div>
-
-					<p className="text-xs text-gray-600 leading-relaxed mb-2">
-						{amb.text}
-					</p>
-
-					{amb.notes && amb.notes.length > 0 && (
-						<ul className="text-[10px] text-gray-400 space-y-1 list-disc pl-4">
-							{amb.notes.map((note, i) => <li key={i}>{note}</li>)}
-						</ul>
-					)}
-					
-					{amb.stale && (
-						<div className="mt-2 text-xs text-orange-600 bg-orange-50 p-2 rounded">
-							Данные нужно пересчитать
-						</div>
-					)}
-				</div>
-			)}
-
-			{amb && !amb.available && amb.text && (
-				<div className="mt-6 pt-4 border-t border-gray-100">
-					<h3 className="text-sm font-semibold text-gray-800 mb-2">Скорая помощь</h3>
-					<div className="inline-block px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-600 mb-2">
-						нет оценки
-					</div>
-					<p className="text-xs text-gray-600">{amb.text}</p>
-				</div>
-			)}
 
 			<div className="mt-6 space-y-4">
 				<div>

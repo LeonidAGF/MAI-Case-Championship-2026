@@ -210,63 +210,51 @@ export interface WhatIfResponse {
 	profile: any;
 }
 
-export type AmbulanceNormStatus = 'met' | 'borderline' | 'not_met';
+export type Season = 'winter' | 'spring' | 'summer' | 'autumn';
 
-export interface AmbulanceEstimate {
-	minutes: number;
-	minutes_low: number;
-	minutes_high: number;
-	travel_minutes: number;
-	dispatch_minutes: number;
-	norm_minutes: number;
-	norm_status: AmbulanceNormStatus;
+export interface ClimateCell {
+	season: Season;
+	temperature_c: number;
+	humidity_pct: number;
+	wind_m_s: number;
+	warm_days: number;
+	extreme_days: number;
+	wet_days: number;
+	days_in_season: number;
+	color: 'green' | 'yellow' | 'red';
+	temperature_deviation_c: number;
+	humidity_deviation_pct: number;
+	grid_lon: number;
+	grid_lat: number;
 }
 
-export interface AmbulanceBase {
-	external_id: string;
-	name: string | null;
-	category: string;
-	category_label: string;
-	location: Point;
-	access_m: number;
+export interface ClimateGridResponse {
+	year: number;
+	period_label: string;
+	source: string;
+	time_standard: string;
+	target: any;
+	cells: ClimateCell[];
 }
 
-export interface AmbulanceRoute {
-	distance_km: number | null;
-	flat_minutes: number | null;
-	terrain_minutes: number | null;
-	climb_m: number | null;
-	descent_m: number | null;
-	max_height_m: number | null;
-	steep_km: number | null;
-	urban_km: number;
-	osm_speed_km: number;
-	no_terrain_km: number;
-	access_m: number;
-}
-
-export interface AmbulanceSettlement {
+export interface ClimateRegion {
 	territory_id: number;
+	region_code: string;
 	name: string;
-	region_code: string | null;
-	region_name: string | null;
-	municipality_id: number | null;
-	municipality_name: string | null;
-	cluster: string | null;
-	population: number | null;
-	location: Point | null;
-	elevation_m: number | null;
-	available: boolean;
-	estimate: AmbulanceEstimate | null;
-	base: AmbulanceBase | null;
-	route: AmbulanceRoute | null;
-	reason: string | null;
-	flags: string[];
-	text: string;
-	notes: string[];
-	model_version: string;
-	computed_at: string | null;
-	stale: boolean;
+	grid_cells: number;
+	season: Season;
+	temperature_c: number | null;
+	humidity_pct: number | null;
+	color: 'green' | 'yellow' | 'red' | null;
+}
+
+export interface ClimateRegionsResponse {
+	year: number;
+	period_label: string;
+	source: string;
+	time_standard: string;
+	target: any;
+	regions: ClimateRegion[];
 }
 
 export async function fetchIndex(territoryId: number, p: Profile) {
@@ -365,6 +353,10 @@ export async function streamChat(
 	if (buffer.trim()) consume(buffer);
 }
 
-export async function fetchAmbulanceSettlement(territoryId: number) {
-	return json<AmbulanceSettlement>(await fetch(`${API}/ambulance/settlements/${territoryId}`));
+export async function fetchClimateGrid(season: Season) {
+	return json<ClimateGridResponse>(await fetch(`${API}/climate/2025/grid?season=${season}`));
+}
+
+export async function fetchClimateRegions(season: Season) {
+	return json<ClimateRegionsResponse>(await fetch(`${API}/climate/2025/regions?season=${season}`));
 }
