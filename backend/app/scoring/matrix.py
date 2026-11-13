@@ -26,6 +26,8 @@ class Provenance:
     inherited_from: str | None  # None (own value) | "municipality" | "region"
     upstream_imputed: bool  # imputed flag set by ETL (plan B data)
     value_mode: str  # car | foot | any
+    as_of: object = None  # date of the value (feature_value.as_of)
+    source: str | None = None  # feature_value.source, e.g. "osm+ml-graph"
 
 
 @dataclass
@@ -39,8 +41,8 @@ class ClusterMatrix:
     cluster_params: dict = field(default_factory=dict)
 
 
-# territory -> feature -> mode -> (value, imputed, as_of); only the latest as_of is kept.
-RawValues = dict[int, dict[str, dict[str, tuple[float | None, bool, object]]]]
+# territory -> feature -> mode -> (value, imputed, as_of, source); only the latest as_of is kept.
+RawValues = dict[int, dict[str, dict[str, tuple[float | None, bool, object, str | None]]]]
 
 
 async def _fetch(
@@ -73,7 +75,7 @@ async def _fetch(
         await session.execute(
             text(
                 """
-                SELECT territory_id, feature_code, mode, as_of, raw_value, imputed
+                SELECT territory_id, feature_code, mode, as_of, raw_value, imputed, source
                 FROM feature_value
                 WHERE territory_id = ANY(:ids) AND feature_code = ANY(:codes)
                 """
@@ -82,11 +84,11 @@ async def _fetch(
         )
     ).all()
     raw: RawValues = {}
-    for tid, code, m, as_of, value, imputed in rows:
+    for tid, code, m, as_of, value, imputed, source in rows:
         by_mode = raw.setdefault(tid, {}).setdefault(code, {})
         current = by_mode.get(m)
         if current is None or as_of > current[2]:
-            by_mode[m] = (value, bool(imputed), as_of)
+            by_mode[m] = (value, bool(imputed), as_of, source)
     return raw, parent_of, level_of
 
 
@@ -112,18 +114,18 @@ async def load_values(
 
     prefs = MODE_PREFERENCE.get(mode, ("any", "car", "foot"))
     # Resolve the mode preference once per owner (territory or ancestor).
-    preferred: dict[int, dict[str, tuple[float, bool, str]]] = {}
+    preferred: dict[int, dict[str, tuple[float, bool, str, object, str | None]]] = {}
     for owner, codes in raw.items():
-        best: dict[str, tuple[float, bool, str]] = {}
+        best: dict[str, tuple[float, bool, str, object, str | None]] = {}
         for code, by_mode in codes.items():
             for m in prefs:
                 hit = by_mode.get(m)
                 if hit is not None and hit[0] is not None:
-                    best[code] = (float(hit[0]), hit[1], m)
+                    best[code] = (float(hit[0]), hit[1], m, hit[2], hit[3])
                     break
         preferred[owner] = best
 
-    empty: dict[str, tuple[float, bool, str]] = {}
+    empty: dict[str, tuple[float, bool, str, object, str | None]] = {}
     values: dict[int, dict[str, float | None]] = {}
     provenance: dict[int, dict[str, Provenance]] = {}
     for tid in ids:
@@ -135,7 +137,8 @@ async def load_values(
                 hit = preferred.get(owner, empty).get(code)
                 if hit is not None:
                     row_v[code] = hit[0]
-                    row_p[code] = Provenance(inherited_from=inherited, upstream_imputed=hit[1], value_mode=hit[2])
+                    row_p[code] = Provenance(inherited_from=inherited, upstream_imputed=hit[1], value_mode=hit[2],
+                                             as_of=hit[3], source=hit[4])
                     break
             else:
                 row_v[code] = None

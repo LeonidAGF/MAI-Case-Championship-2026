@@ -546,3 +546,43 @@ class AmbulanceMethod(BaseModel):
     sources: list[str]
     run: dict[str, Any] = Field(description="Статистика последнего расчёта: граф, базы, скорости, рельеф")
     description: list[str]
+
+
+# --- data API for organisations (/v1) ----------------------------------------------------------
+
+
+class V1Scope(BaseModel):
+    code: str
+    description: str
+
+
+class V1Me(BaseModel):
+    organisation: str
+    key_prefix: str = Field(description="Начало ключа: по нему команда находит и отзывает ключ")
+    key_name: str
+    scopes: list[V1Scope]
+    rate_limit_per_minute: int
+    expires_at: dt.datetime | None = Field(description="До какого момента действует ключ (оплаченный срок)")
+
+
+class V1Column(BaseModel):
+    key: str = Field(description="Имя колонки в CSV для программ и ключ в JSON")
+    label: str = Field(description="Заголовок колонки в CSV для Excel")
+    type: str = Field(description="str, int, float, bool, date или datetime")
+    values: dict[str, str] | None = Field(None, description="Русские слова для кодов в CSV для Excel")
+
+
+class V1Dataset(BaseModel):
+    name: str
+    title: str
+    description: str
+    url: str
+    formats: list[str]
+    params: list[str]
+    columns: list[V1Column]
+
+
+class V1Catalog(BaseModel):
+    meta: dict[str, Any] = Field(description="Ревизия данных, версия модели, время выгрузки, атрибуция")
+    datasets: list[V1Dataset]
+    notes: list[str]
