@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useAtlas } from '@/lib/store';
 import { streamChat } from '@/lib/api';
 
@@ -34,7 +36,6 @@ export function ChatWidget() {
 		const text = input.trim();
 		if (!text || isLoading) return;
 
-		// Only answered exchanges go to the API: never an empty reply or a question left without an answer.
 		const answered = messagesRef.current.filter((m) => m.content.trim());
 		const historyToSend: Message[] = [...answered, { role: 'user', content: text }];
 
@@ -57,7 +58,6 @@ export function ChatWidget() {
 		} catch (e: unknown) {
 			console.error(e);
 			setError(e instanceof Error ? e.message : 'Произошла ошибка при обращении к ИИ');
-			// Roll the failed exchange back and return the question to the input so it can be sent again.
 			setMessages(answered);
 			setInput(text);
 		} finally {
@@ -83,9 +83,7 @@ export function ChatWidget() {
 
 			{isOpen && (
 				<div className="fixed z-50 bg-white shadow-2xl border border-gray-200 flex flex-col overflow-hidden transition-all
-					/* Мобилка: почти на весь экран */
 					bottom-0 right-0 w-full h-[85vh] rounded-t-2xl
-					/* ПК: в углу */
 					md:bottom-6 md:right-6 md:w-96 md:h-[600px] md:rounded-2xl"
 				>
 				
@@ -111,12 +109,46 @@ export function ChatWidget() {
 
 						{messages.map((m, i) => (
 							<div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-								<div className={`max-w-[85%] p-3 rounded-2xl text-sm ${
+								<div className={`max-w-[95%] p-3 rounded-2xl text-sm ${
 								m.role === 'user' 
-									? 'bg-blue-600 text-white rounded-br-none' 
+									? 'bg-blue-600 text-white rounded-br-none whitespace-pre-wrap' 
 									: 'bg-white border text-gray-800 rounded-bl-none shadow-sm'
 								}`}>
-									{m.content || (m.role === 'assistant' && isLoading && <span className="animate-pulse text-gray-400">Проверяю данные...</span>)}
+									{m.role === 'user' ? (
+										m.content
+									) : m.content ? (
+										<div className="markdown-body">
+											<ReactMarkdown 
+												remarkPlugins={[remarkGfm]}
+												components={{
+													// Кастомные стили для элементов Markdown
+													p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+													ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-2 space-y-1" {...props} />,
+													ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-2 space-y-1" {...props} />,
+													li: ({node, ...props}) => <li className="" {...props} />,
+													strong: ({node, ...props}) => <strong className="font-bold text-gray-900" {...props} />,
+													h1: ({node, ...props}) => <h1 className="text-base font-bold mb-2 mt-4 first:mt-0" {...props} />,
+													h2: ({node, ...props}) => <h2 className="text-sm font-bold mb-2 mt-4 first:mt-0" {...props} />,
+													h3: ({node, ...props}) => <h3 className="text-sm font-semibold mb-1 mt-3 first:mt-0" {...props} />,
+													table: ({node, ...props}) => (
+														<div className="overflow-x-auto my-2">
+															<table className="min-w-full divide-y divide-gray-200 border text-xs" {...props} />
+														</div>
+													),
+													th: ({node, ...props}) => <th className="px-2 py-1 bg-gray-100 font-medium text-left border" {...props} />,
+													td: ({node, ...props}) => <td className="px-2 py-1 border" {...props} />,
+													code: ({node, inline, ...props}: any) => 
+														inline 
+															? <code className="bg-gray-100 px-1 rounded text-xs" {...props} />
+															: <pre className="bg-gray-800 text-gray-100 p-2 rounded text-xs overflow-x-auto my-2"><code {...props} /></pre>
+												}}
+											>
+												{m.content}
+											</ReactMarkdown>
+										</div>
+									) : (
+										<span className="animate-pulse text-gray-400">Проверяю данные...</span>
+									)}
 								</div>
 							</div>
 						))}

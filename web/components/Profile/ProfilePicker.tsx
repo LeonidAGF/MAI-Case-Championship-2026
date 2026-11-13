@@ -37,12 +37,12 @@ export function ProfilePicker() {
 	};
 
 	return (
-		<div className="flex gap-2 flex-wrap">
+		<div className="flex gap-2 shrink-0 items-center">
 			{PRESETS.map((p) => (
 				<button
 					key={p.id}
 					onClick={() => applyPreset(p)}
-					className={`px-3 py-1 text-sm rounded transition ${profile.preset === p.id ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 hover:bg-gray-200'}`}
+					className={`px-3 py-1.5 text-sm md:text-sm whitespace-nowrap rounded-lg transition ${profile.preset === p.id ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
 				>
 					{p.label}
 				</button>
