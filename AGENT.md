@@ -99,7 +99,7 @@ http://localhost:3001.
   `ml_results/`, `geo-embeddings/data/`. The backend only reads `data/`, the OSM CSV files in
   `geo-embeddings/data/` and, in `load-ambulance`, the road graph in `graph/`.
 - **Secrets.** `backend/.env` holds the Anthropic API key. Never print it, copy it into other files or
-  commit it. `.env*` is gitignored, but `backend/.env.example` is tracked, so keep it secret-free.
+  commit it. Organisation API keys (`pulse_…`) are secrets too: the database keeps only their hashes. `.env*` is gitignored, but `backend/.env.example` is tracked, so keep it secret-free.
 - **Paid calls.** `python -m app.cli chat-eval` and anything else that calls the Anthropic API costs
   money. Run them only when the user asks. `chat-check` is free.
 - **Real data only.** The product loads real data; synthetic values exist only in the integration
@@ -124,6 +124,7 @@ Change both sides in the same branch, or coordinate with the owner:
 
 | Contract | Producer | Consumer |
 |---|---|---|
+| Data API for organisations (`/v1/*` routes, dataset columns; paid, external) | `backend/app/api/routes/v1.py`, `backend/app/partners/datasets.py` | organisations' own programs: change only additively |
 | HTTP API (`backend/openapi.json`, regenerate with `python -m app.cli export-openapi`) | `backend/app/api/schemas.py`, `backend/app/api/routes/` | `web/lib/api.ts` (hand-written TS types) |
 | Profile v1 (`v`, `preset`, `weights` S1–S6 summing to 100, 9 `filters`) | `backend/app/profiles/contract.py` | `web/types/profile.ts`, `web/lib/profile.ts` |
 | Model config YAML + `IndexEngine` | ML (`MODEL_CONFIG_PATH`, `SCORING_ENGINE`) | `backend/app/modelcfg.py`, `backend/app/scoring/contract.py` |

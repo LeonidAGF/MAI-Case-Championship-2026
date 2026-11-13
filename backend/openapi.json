@@ -1890,6 +1890,565 @@
           }
         }
       }
+    },
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "organisations"
+        ],
+        "summary": "Проверка ключа: организация, права, срок",
+        "operationId": "me_v1_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа API или ключ неверный",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ключ отозван, истёк или не даёт этого доступа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OrganisationKey": []
+          },
+          {
+            "OrganisationKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/datasets": {
+      "get": {
+        "tags": [
+          "organisations"
+        ],
+        "summary": "Каталог наборов данных: колонки, параметры, дата и ревизия данных",
+        "operationId": "catalog_v1_datasets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V1Catalog"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа API или ключ неверный",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ключ отозван, истёк или не даёт этого доступа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OrganisationKey": []
+          },
+          {
+            "OrganisationKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/datasets/{dataset}.{fmt}": {
+      "get": {
+        "tags": [
+          "organisations"
+        ],
+        "summary": "Набор данных в CSV или JSON (фильтры по субъекту, району, кластеру)",
+        "operationId": "dataset_v1_datasets__dataset___fmt__get",
+        "security": [
+          {
+            "OrganisationKey": []
+          },
+          {
+            "OrganisationKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dataset",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DatasetName"
+            }
+          },
+          {
+            "name": "fmt",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "csv",
+                "json"
+              ],
+              "type": "string",
+              "title": "Fmt"
+            }
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Код субъекта ISO 3166-2, напр. RU-DA",
+              "title": "Region"
+            },
+            "description": "Код субъекта ISO 3166-2, напр. RU-DA"
+          },
+          {
+            "name": "municipality_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "id района",
+              "title": "Municipality Id"
+            },
+            "description": "id района"
+          },
+          {
+            "name": "cluster",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A | B | V (или А/Б/В)",
+              "title": "Cluster"
+            },
+            "description": "A | B | V (или А/Б/В)"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "car",
+                "foot"
+              ],
+              "type": "string",
+              "description": "features: способ передвижения для времени в пути",
+              "default": "car",
+              "title": "Mode"
+            },
+            "description": "features: способ передвижения для времени в пути"
+          },
+          {
+            "name": "layout",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "long",
+                "wide"
+              ],
+              "type": "string",
+              "description": "features: строка на значение или на пункт",
+              "default": "long",
+              "title": "Layout"
+            },
+            "description": "features: строка на значение или на пункт"
+          },
+          {
+            "name": "excel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "CSV для Excel: точка с запятой, запятая в дробях, русские заголовки",
+              "default": false,
+              "title": "Excel"
+            },
+            "description": "CSV для Excel: точка с запятой, запятая в дробях, русские заголовки"
+          },
+          {
+            "name": "profile",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "id пресета (family, pensioner, ...)",
+              "title": "Profile"
+            },
+            "description": "id пресета (family, pensioner, ...)"
+          },
+          {
+            "name": "p",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Сериализованный профиль из URL: base64url(JSON) или base64url(deflate-raw(JSON))",
+              "title": "P"
+            },
+            "description": "Сериализованный профиль из URL: base64url(JSON) или base64url(deflate-raw(JSON))"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Таблица в CSV или JSON",
+            "content": {
+              "text/csv": {},
+              "application/json": {}
+            }
+          },
+          "503": {
+            "description": "Время доезда скорой ещё не рассчитано",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа API или ключ неверный",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ключ отозван, истёк или не даёт этого доступа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/scenario-runs/{run_id}.{fmt}": {
+      "get": {
+        "tags": [
+          "organisations"
+        ],
+        "summary": "Результат сценария «что если» в CSV или JSON: значения до и после",
+        "operationId": "scenario_run_v1_scenario_runs__run_id___fmt__get",
+        "security": [
+          {
+            "OrganisationKey": []
+          },
+          {
+            "OrganisationKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "fmt",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "csv",
+                "json"
+              ],
+              "type": "string",
+              "title": "Fmt"
+            }
+          },
+          {
+            "name": "excel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "CSV для Excel",
+              "default": false,
+              "title": "Excel"
+            },
+            "description": "CSV для Excel"
+          },
+          {
+            "name": "profile",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "id пресета (family, pensioner, ...)",
+              "title": "Profile"
+            },
+            "description": "id пресета (family, pensioner, ...)"
+          },
+          {
+            "name": "p",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Сериализованный профиль из URL: base64url(JSON) или base64url(deflate-raw(JSON))",
+              "title": "P"
+            },
+            "description": "Сериализованный профиль из URL: base64url(JSON) или base64url(deflate-raw(JSON))"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Таблица в CSV или JSON",
+            "content": {
+              "text/csv": {},
+              "application/json": {}
+            }
+          },
+          "503": {
+            "description": "Время доезда скорой ещё не рассчитано",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа API или ключ неверный",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ключ отозван, истёк или не даёт этого доступа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3527,6 +4086,17 @@
         ],
         "title": "DataCoverage"
       },
+      "DatasetName": {
+        "type": "string",
+        "enum": [
+          "settlements",
+          "features",
+          "index",
+          "ambulance",
+          "municipalities"
+        ],
+        "title": "DatasetName"
+      },
       "EncodeRequest": {
         "properties": {
           "profile": {
@@ -5102,6 +5672,199 @@
         ],
         "title": "TerritoryList"
       },
+      "V1Catalog": {
+        "properties": {
+          "meta": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Meta",
+            "description": "Ревизия данных, версия модели, время выгрузки, атрибуция"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/V1Dataset"
+            },
+            "type": "array",
+            "title": "Datasets"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meta",
+          "datasets",
+          "notes"
+        ],
+        "title": "V1Catalog"
+      },
+      "V1Column": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Имя колонки в CSV для программ и ключ в JSON"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Заголовок колонки в CSV для Excel"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "str, int, float, bool, date или datetime"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Values",
+            "description": "Русские слова для кодов в CSV для Excel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "type"
+        ],
+        "title": "V1Column"
+      },
+      "V1Dataset": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Formats"
+          },
+          "params": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Params"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/V1Column"
+            },
+            "type": "array",
+            "title": "Columns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "title",
+          "description",
+          "url",
+          "formats",
+          "params",
+          "columns"
+        ],
+        "title": "V1Dataset"
+      },
+      "V1Me": {
+        "properties": {
+          "organisation": {
+            "type": "string",
+            "title": "Organisation"
+          },
+          "key_prefix": {
+            "type": "string",
+            "title": "Key Prefix",
+            "description": "Начало ключа: по нему команда находит и отзывает ключ"
+          },
+          "key_name": {
+            "type": "string",
+            "title": "Key Name"
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/V1Scope"
+            },
+            "type": "array",
+            "title": "Scopes"
+          },
+          "rate_limit_per_minute": {
+            "type": "integer",
+            "title": "Rate Limit Per Minute"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At",
+            "description": "До какого момента действует ключ (оплаченный срок)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "organisation",
+          "key_prefix",
+          "key_name",
+          "scopes",
+          "rate_limit_per_minute",
+          "expires_at"
+        ],
+        "title": "V1Me"
+      },
+      "V1Scope": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "description"
+        ],
+        "title": "V1Scope"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -5496,6 +6259,19 @@
         ],
         "title": "WhatIfResult"
       }
+    },
+    "securitySchemes": {
+      "OrganisationKey": {
+        "type": "http",
+        "description": "Ключ API организации: заголовок `Authorization: Bearer pulse_…`",
+        "scheme": "bearer"
+      },
+      "OrganisationKeyHeader": {
+        "type": "apiKey",
+        "description": "Тот же ключ в заголовке `X-API-Key`, если Authorization занят",
+        "in": "header",
+        "name": "X-API-Key"
+      }
     }
   },
   "tags": [
@@ -5522,6 +6298,10 @@
     {
       "name": "ambulance",
       "description": "Время доезда скорой помощи: дороги OSM, максимальные скорости, рельеф SRTM"
+    },
+    {
+      "name": "organisations",
+      "description": "API для организаций по ключу: выгрузки CSV и JSON"
     },
     {
       "name": "profiles",

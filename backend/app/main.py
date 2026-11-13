@@ -16,13 +16,15 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.routes import (
-    ambulance, chat, compare, explain, health, index, knowledge, profiles, reference, territories, whatif,
+    ambulance, chat, compare, explain, health, index, knowledge, profiles, reference, territories, v1, whatif,
 )
 from app.container import Container, build_container
 from app.core.config import Settings, get_settings
+from app.core.db_metrics import DB_SCOPE
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
 from app.core.metrics import HTTP_DURATION, HTTP_INFLIGHT, HTTP_REQUESTS, collect_data_metrics, exposition, mark_worker_dead
+from app.partners.telemetry import PARTNER_DURATION, PARTNER_REQUESTS, request_labels
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +46,7 @@ TAGS = [
     {"name": "compare", "description": "Сравнение side-by-side внутри кластера"},
     {"name": "what-if", "description": "Сценарии W1–W10 и их прогоны"},
     {"name": "ambulance", "description": "Время доезда скорой помощи: дороги OSM, максимальные скорости, рельеф SRTM"},
+    {"name": "organisations", "description": "API для организаций по ключу: выгрузки CSV и JSON"},
     {"name": "profiles", "description": "Пресеты и кодирование профиля в ссылку"},
     {"name": "reference", "description": "Справочники и полнота данных"},
     {"name": "chat", "description": "Чат-ассистент (фича №2, SSE)"},
@@ -83,6 +86,7 @@ class MetricsMiddleware:
         started = time.perf_counter()
         method = scope["method"]
         status = 500
+        db_scope_token = DB_SCOPE.set("partner") if scope["path"].startswith("/v1/") else None
         HTTP_INFLIGHT.inc()
 
         async def send_wrapper(message: Message) -> None:
@@ -94,13 +98,29 @@ class MetricsMiddleware:
         try:
             await self.app(scope, receive, send_wrapper)
         finally:
-            route = getattr(scope.get("route"), "path", "unmatched")
-            elapsed = time.perf_counter() - started
-            HTTP_REQUESTS.labels(method, route, str(status)).inc()
-            HTTP_DURATION.labels(method, route).observe(elapsed)
-            HTTP_INFLIGHT.dec()
-            if route != "/healthz":
-                log.info("http_request", extra={"method": method, "route": route, "status": status, "duration_ms": round(elapsed * 1000, 1)})
+            try:
+                route = getattr(scope.get("route"), "path", "unmatched")
+                elapsed = time.perf_counter() - started
+                HTTP_REQUESTS.labels(method, route, str(status)).inc()
+                HTTP_DURATION.labels(method, route).observe(elapsed)
+                HTTP_INFLIGHT.dec()
+                fields = {"method": method, "route": route, "status": status, "duration_ms": round(elapsed * 1000, 1)}
+                partner = request_labels(scope)
+                if partner is not None:
+                    dataset, fmt, region = partner
+                    PARTNER_REQUESTS.labels(dataset, fmt, region, str(status)).inc()
+                    PARTNER_DURATION.labels(dataset, fmt, region).observe(elapsed)
+                    fields.update(dataset=dataset, export_format=fmt, requested_region=region)
+                    state = scope.get("state") or {}
+                    for key in ("organisation_id", "key_id", "export_rows", "export_bytes"):
+                        value = state.get(f"partner_{key}")
+                        if value is not None:
+                            fields[key] = value
+                if route != "/healthz":
+                    log.info("http_request", extra=fields)
+            finally:
+                if db_scope_token is not None:
+                    DB_SCOPE.reset(db_scope_token)
 
 
 def create_app(container_factory: Callable[[Settings], Container] | None = None) -> FastAPI:
@@ -146,7 +166,9 @@ def create_app(container_factory: Callable[[Settings], Container] | None = None)
         body, content_type = exposition()
         return Response(content=body, media_type=content_type)
 
-    for module in (health, territories, index, explain, compare, whatif, ambulance, profiles, reference, knowledge, chat):
+    for module in (
+        health, territories, index, explain, compare, whatif, ambulance, profiles, reference, knowledge, chat, v1,
+    ):
         app.include_router(module.router)
     return app
 
