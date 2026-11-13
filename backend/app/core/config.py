@@ -152,7 +152,9 @@ class Settings(BaseSettings):
     # --- convenience -----------------------------------------------------------
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        # Browsers send the Origin without a trailing slash, so "https://site.ru/" would never match.
+        origins = (o.strip().rstrip("/") for o in self.cors_origins.split(","))
+        return [o for o in origins if o]
 
     @property
     def sync_database_url(self) -> str:
