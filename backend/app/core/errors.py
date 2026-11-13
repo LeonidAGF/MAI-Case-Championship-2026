@@ -49,6 +49,16 @@ class ApiError(Exception):
         return body
 
 
+class Unauthorized(ApiError):
+    status_code = 401
+    code = "unauthorized"
+
+
+class Forbidden(ApiError):
+    status_code = 403
+    code = "forbidden"
+
+
 class NotFoundError(ApiError):
     status_code = 404
     code = "not_found"
@@ -135,4 +145,10 @@ ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     404: {"model": ErrorResponse, "description": "Не найдено"},
     422: {"model": ErrorResponse, "description": "Ошибка валидации"},
     429: {"model": ErrorResponse, "description": "Превышен лимит запросов"},
+}
+# Routes that need an organisation's API key (/v1).
+KEY_RESPONSES: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorResponse, "description": "Нет ключа API или ключ неверный"},
+    403: {"model": ErrorResponse, "description": "Ключ отозван, истёк или не даёт этого доступа"},
+    **ERROR_RESPONSES,
 }

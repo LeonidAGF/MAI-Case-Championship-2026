@@ -110,6 +110,13 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 300
     rate_limit_whatif_per_minute: int = 30
     rate_limit_chat_per_minute: int = 12
+    # /v1 data API: requests per minute per organisation key (a key can override it).
+    rate_limit_api_key_per_minute: int = 120
+    # Public address of this API, used in the e-mail text printed by `key-issue`.
+    api_public_url: str = "http://localhost:8000"
+
+    # Payment details printed in invoice letters by `order-create` (one line: bank account, recipient, ...).
+    payment_details: str = ""
     trust_forwarded_for: bool = False
     max_page_size: int = 500
     max_index_items: int = 5000

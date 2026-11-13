@@ -13,6 +13,7 @@ this module (tests/integration/test_migrations.py runs ``alembic check``).
 from __future__ import annotations
 
 import datetime as dt
+from decimal import Decimal
 from typing import Any
 
 from geoalchemy2 import Geometry
@@ -28,6 +29,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -372,6 +374,97 @@ class AmbulanceTime(Base):
     elevation_m: Mapped[float | None] = mapped_column(Float)
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     etl_run_id: Mapped[int | None] = mapped_column(ForeignKey("etl_run.id", ondelete="SET NULL"))
+
+
+class Organisation(Base):
+    """A paying organisation of the /v1 data API (municipality administration, company, ...).
+
+    Created by a team member with `python -m app.cli org-add`; there is no self sign-up.
+    """
+
+    __tablename__ = "organisation"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, unique=True)
+    # The only address keys are sent to (checked by the team before the first key).
+    contact_email: Mapped[str] = mapped_column(Text)
+    comment: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    created_at: Mapped[dt.datetime] = _ts()
+
+
+class ApiKey(Base):
+    """An API key of an organisation. Only the SHA-256 hash is stored; the key is shown once."""
+
+    __tablename__ = "api_key"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organisation_id: Mapped[int] = mapped_column(ForeignKey("organisation.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    # First characters of the key ("pulse_AbCd1234"), to recognise it in lists and revoke it.
+    prefix: Mapped[str] = mapped_column(String(16), unique=True)
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(String(32)), server_default=text("'{}'"))
+    # Requests per minute; NULL = RATE_LIMIT_API_KEY_PER_MINUTE.
+    rate_limit_per_minute: Mapped[int | None] = mapped_column(Integer)
+    # Free text for the team, e.g. the invoice the key was issued for.
+    note: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    created_at: Mapped[dt.datetime] = _ts()
+    expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_api_key_organisation_id", "organisation_id"),)
+
+
+class PaymentOrder(Base):
+    """An order for paid access to the /v1 data API, approved by hand (no payment provider).
+
+    `order-create` -> awaiting_payment (the team sends an invoice letter); when the money has arrived,
+    `order-confirm` -> paid -> fulfilled (the organisation's keys extended by `months`, or the first key
+    issued with `key-issue --order`); `order-cancel` -> canceled.
+    """
+
+    __tablename__ = "payment_order"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organisation_id: Mapped[int] = mapped_column(ForeignKey("organisation.id"))
+    months: Mapped[int] = mapped_column(SmallInteger)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(3), server_default=text("'RUB'"))
+    description: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), server_default=text("'awaiting_payment'"))
+    # What the team checked when confirming: the transfer's number or comment, and who confirmed.
+    payment_reference: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    confirmed_by: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    cancel_reason: Mapped[str | None] = mapped_column(Text)
+    note: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    created_at: Mapped[dt.datetime] = _ts()
+    paid_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    fulfilled_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint("status IN ('awaiting_payment', 'paid', 'fulfilled', 'canceled')", name="status"),
+        CheckConstraint("months > 0", name="months"),
+        CheckConstraint("amount > 0", name="amount"),
+        Index("ix_payment_order_organisation_id", "organisation_id"),
+    )
+
+
+class PaymentEvent(Base):
+    """Audit trail of every order step: created, payment confirmed, canceled, key issued."""
+
+    __tablename__ = "payment_event"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("payment_order.id", ondelete="SET NULL"))
+    event: Mapped[str] = mapped_column(String(64))
+    outcome: Mapped[str] = mapped_column(String(32))
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    created_at: Mapped[dt.datetime] = _ts()
+
+    __table_args__ = (Index("ix_payment_event_order_id", "order_id"),)
 
 
 class KnowledgeChunk(Base):

@@ -254,7 +254,7 @@ class AmbulanceService:
         return out
 
     # --- lists and summaries ------------------------------------------------------------------
-    def _item(self, row: Row) -> dict[str, Any]:
+    def item(self, row: Row) -> dict[str, Any]:
         est = self.estimate(row.travel) if row.travel is not None else None
         base = row.details.get("base") or {}
         flat = row.flat if row.flat is not None else row.travel
@@ -293,7 +293,7 @@ class AmbulanceService:
     ) -> dict[str, Any]:
         table = await self.table(session)
         rows = self._select(table, region=region, municipality_id=municipality_id, cluster=cluster)
-        items = [self._item(r) for r in rows]
+        items = [self.item(r) for r in rows]
         if status == "none":
             items = [i for i in items if i["minutes"] is None]
         elif status:
@@ -382,7 +382,7 @@ class AmbulanceService:
         slow = sorted((r for r in rows if r.travel is not None), key=lambda r: (-(r.travel or 0), r.territory_id))
         return {
             "scope": scope, "norm_minutes": self.cfg.norm_minutes, "dispatch_minutes": self.cfg.dispatch_minutes,
-            "stats": stats, "groups": groups, "slowest": [self._item(r) for r in slow[:slowest]],
+            "stats": stats, "groups": groups, "slowest": [self.item(r) for r in slow[:slowest]],
             "text": texts.summary_text(scope["name"], stats, self.cfg.norm_minutes),
             "model_version": self.cfg.version, "computed_at": table.computed_at, "stale": self.stale(table),
         }

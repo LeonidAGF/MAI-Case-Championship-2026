@@ -253,6 +253,119 @@ async def cmd_load_ambulance(args: argparse.Namespace) -> Any:
     return out
 
 
+# --- organisations, API keys and payments (/v1 data API) -----------------------------------
+async def _db(fn: Callable[[Any], Awaitable[Any]]) -> Any:
+    """One session for a team command; committed when the command succeeds."""
+    from app.db.session import make_engine, make_sessionmaker
+
+    engine = make_engine(get_settings(), pool=False)
+    try:
+        async with make_sessionmaker(engine)() as session:
+            result = await fn(session)
+            await session.commit()
+            return result
+    finally:
+        await engine.dispose()
+
+
+def _expiry(args: argparse.Namespace) -> dt.datetime | None:
+    from app.partners.keys import MSK, end_of_day
+
+    if getattr(args, "expires", None):
+        return end_of_day(dt.date.fromisoformat(args.expires))
+    if getattr(args, "days", None):
+        return end_of_day(dt.datetime.now(MSK).date() + dt.timedelta(days=args.days))
+    return None
+
+
+async def cmd_org_add(args: argparse.Namespace) -> Any:
+    from app.partners.store import add_organisation
+
+    return await _db(lambda s: add_organisation(s, args.name, args.email, args.comment or ""))
+
+
+async def cmd_org_list(_: argparse.Namespace) -> Any:
+    from app.partners.store import list_organisations
+
+    return await _db(list_organisations)
+
+
+async def cmd_org_disable(args: argparse.Namespace) -> Any:
+    from app.partners.store import set_organisation_active
+
+    return await _db(lambda s: set_organisation_active(s, args.org, False))
+
+
+async def cmd_org_enable(args: argparse.Namespace) -> Any:
+    from app.partners.store import set_organisation_active
+
+    return await _db(lambda s: set_organisation_active(s, args.org, True))
+
+
+async def cmd_key_issue(args: argparse.Namespace) -> Any:
+    from app.partners.keys import email_text
+    from app.partners.store import issue_key
+    from app.payments.service import issue_key_for_order
+
+    if args.order:
+        key, info = await _db(lambda s: issue_key_for_order(s, args.order, name=args.name or ""))
+    else:
+        key, info = await _db(lambda s: issue_key(
+            s, args.org, name=args.name or "", expires_at=_expiry(args), rate_limit_per_minute=args.rate_limit,
+            note=args.note or "",
+        ))
+    text = email_text(info["organisation"], key, get_settings().api_public_url, info["expires_at"])
+    return {**info, "api_key": key, "email_text": text}
+
+
+async def cmd_key_list(args: argparse.Namespace) -> Any:
+    from app.partners.store import list_keys
+
+    return await _db(lambda s: list_keys(s, args.org))
+
+
+async def cmd_key_revoke(args: argparse.Namespace) -> Any:
+    from app.partners.store import revoke_key
+
+    return await _db(lambda s: revoke_key(s, args.prefix))
+
+
+async def cmd_key_extend(args: argparse.Namespace) -> Any:
+    from app.partners.store import extend_key
+
+    return await _db(lambda s: extend_key(s, args.prefix, _expiry(args)))
+
+
+async def cmd_order_create(args: argparse.Namespace) -> Any:
+    from app.payments.service import create_order, parse_amount
+
+    details = args.details if args.details is not None else get_settings().payment_details
+    return await _db(lambda s: create_order(s, org_ref=args.org, months=args.months, amount=parse_amount(args.amount),
+                                            details=details, note=args.note or ""))
+
+
+async def cmd_order_confirm(args: argparse.Namespace) -> Any:
+    import getpass
+
+    from app.payments.service import confirm_order, parse_amount
+
+    by = args.by or getpass.getuser()
+    return await _db(lambda s: confirm_order(s, args.order, received=parse_amount(args.received),
+                                             reference=args.reference or "", confirmed_by=by))
+
+
+async def cmd_order_cancel(args: argparse.Namespace) -> Any:
+    from app.payments.service import cancel_order
+
+    return await _db(lambda s: cancel_order(s, args.order, reason=args.reason or ""))
+
+
+async def cmd_order_list(args: argparse.Namespace) -> Any:
+    from app.payments.service import list_orders
+
+    return await _db(lambda s: list_orders(s, args.org, args.status))
+
+
 async def cmd_coverage(_: argparse.Namespace) -> Any:
     from app.etl.coverage import coverage_report
 
@@ -387,6 +500,52 @@ def build_parser() -> argparse.ArgumentParser:
     la.add_argument("--offline", action="store_true", help="do not download missing SRTM tiles")
     la.add_argument("--no-terrain", action="store_true", help="ignore height and slope (no SRTM)")
 
+    oa_ = sub.add_parser("org-add", help="add an organisation of the /v1 data API (after checking who it is)")
+    oa_.add_argument("name")
+    oa_.add_argument("--email", required=True, help="the only address keys and payment links are sent to")
+    oa_.add_argument("--comment")
+    sub.add_parser("org-list", help="organisations with their active keys and last use")
+    od_ = sub.add_parser("org-disable", help="cut off all keys of an organisation")
+    od_.add_argument("org", help="name or id")
+    oe_ = sub.add_parser("org-enable", help="give access back to a disabled organisation")
+    oe_.add_argument("org", help="name or id")
+    ki = sub.add_parser("key-issue", help="issue an API key (printed once, with a letter to send)")
+    target = ki.add_mutually_exclusive_group(required=True)
+    target.add_argument("--org", help="name or id: a key issued by hand")
+    target.add_argument("--order", type=int, help="paid order id: the first key, valid for the paid months")
+    ki.add_argument("--name", help="what the key is for, e.g. the organisation's system")
+    until = ki.add_mutually_exclusive_group()
+    until.add_argument("--expires", help="last valid day YYYY-MM-DD (Moscow time)")
+    until.add_argument("--days", type=int, help="valid for this many days")
+    ki.add_argument("--rate-limit", type=int, help="requests per minute (default RATE_LIMIT_API_KEY_PER_MINUTE)")
+    ki.add_argument("--note", help="for the team, e.g. the invoice")
+    kl = sub.add_parser("key-list", help="keys: prefix, organisation, status, expiry, last use (never the key)")
+    kl.add_argument("--org", help="name or id")
+    kr = sub.add_parser("key-revoke", help="revoke a key by its prefix (pulse_...)")
+    kr.add_argument("prefix")
+    ke = sub.add_parser("key-extend", help="move a key's expiry (the organisation keeps the same key)")
+    ke.add_argument("prefix")
+    ke_until = ke.add_mutually_exclusive_group(required=True)
+    ke_until.add_argument("--expires", help="last valid day YYYY-MM-DD (Moscow time)")
+    ke_until.add_argument("--days", type=int, help="valid for this many days from today")
+    oc = sub.add_parser("order-create", help="order for paid access: an invoice letter with the payment details")
+    oc.add_argument("--org", required=True, help="name or id")
+    oc.add_argument("--months", type=int, required=True)
+    oc.add_argument("--amount", required=True, help="rubles, e.g. 60000 or 60000.50")
+    oc.add_argument("--details", help="payment details for the letter (default PAYMENT_DETAILS)")
+    oc.add_argument("--note", help="for the team, e.g. the contract number")
+    ocf = sub.add_parser("order-confirm", help="the money has arrived: extend the keys (or wait for key-issue --order)")
+    ocf.add_argument("order", type=int)
+    ocf.add_argument("--received", required=True, help="the amount that arrived, rubles: must equal the order's")
+    ocf.add_argument("--reference", help="the transfer's number, date or comment")
+    ocf.add_argument("--by", help="who confirms (default: the OS user name)")
+    occ = sub.add_parser("order-cancel", help="close an unpaid order")
+    occ.add_argument("order", type=int)
+    occ.add_argument("--reason")
+    ol = sub.add_parser("order-list", help="payment orders")
+    ol.add_argument("--org", help="name or id")
+    ol.add_argument("--status", choices=["awaiting_payment", "paid", "fulfilled", "canceled"])
+
     sub.add_parser("coverage", help="data completeness report (JSON)")
     oa = sub.add_parser("export-openapi", help="write the OpenAPI contract for the frontend")
     oa.add_argument("--out", default=str(BACKEND_DIR / "openapi.json"))
@@ -412,6 +571,18 @@ ASYNC_COMMANDS = {
     "seed-knowledge": cmd_seed_knowledge,
     "fetch-srtm": cmd_fetch_srtm,
     "load-ambulance": cmd_load_ambulance,
+    "org-add": cmd_org_add,
+    "org-list": cmd_org_list,
+    "org-disable": cmd_org_disable,
+    "org-enable": cmd_org_enable,
+    "key-issue": cmd_key_issue,
+    "key-list": cmd_key_list,
+    "key-revoke": cmd_key_revoke,
+    "key-extend": cmd_key_extend,
+    "order-create": cmd_order_create,
+    "order-confirm": cmd_order_confirm,
+    "order-cancel": cmd_order_cancel,
+    "order-list": cmd_order_list,
     "coverage": cmd_coverage,
     "chat-check": cmd_chat_check,
     "chat-eval": cmd_chat_eval,
@@ -429,7 +600,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "seed" and not hasattr(args, "data_dir"):
         args.data_dir = None
     result = asyncio.run(ASYNC_COMMANDS[args.command](args))
+    letter = result.pop("email_text", None) if isinstance(result, dict) else None
     _print(result)
+    if letter:  # a letter to paste into an e-mail to the organisation (contains the key or payment link)
+        sys.stdout.write("\n--- письмо для организации ---\n" + letter + "\n")
+        sys.stdout.flush()
     if args.command == "chat-eval" and not result.get("passed"):
         return 1
     if args.command == "chat-check" and not result.get("ok"):
