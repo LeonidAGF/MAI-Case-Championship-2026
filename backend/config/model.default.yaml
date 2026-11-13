@@ -44,9 +44,9 @@ features:
   F21: {name: "Время до ближайшего города 50 тыс.+ (рынок труда)", unit: "мин", direction: lower_better, subindex: S5, time_based: true, source: "OSRM"}
   F22: {name: "Оборот розничной торговли на душу", unit: "тыс. руб.", direction: higher_better, subindex: S5, level: municipality, source: "ЕМИСС"}
   F23: {name: "Уровень безработицы муниципалитета", unit: "%", direction: lower_better, subindex: S5, level: municipality, source: "ЕМИСС"}
-  F24: {name: "Число дискомфортных дней (ниже −15 / выше +30 °C)", unit: "дней/год", direction: lower_better, subindex: S6, source: "Open-Meteo API"}
-  F25: {name: "Число дней с осадками выше 5 мм", unit: "дней/год", direction: lower_better, subindex: S6, source: "Open-Meteo API"}
-  F26: {name: "Средняя скорость ветра в холодный период", unit: "м/с", direction: lower_better, subindex: S6, source: "Open-Meteo API"}
+  F24: {name: "Число дискомфортных дней (ниже −15 / выше +30 °C)", unit: "дней/год", direction: lower_better, subindex: S6, source: "NASA POWER, 2025, UTC"}
+  F25: {name: "Число дней с осадками выше 5 мм", unit: "дней/год", direction: lower_better, subindex: S6, source: "NASA POWER, 2025, UTC"}
+  F26: {name: "Средняя скорость ветра в холодный период", unit: "м/с", direction: lower_better, subindex: S6, source: "NASA POWER, 2025, UTC"}
   F27: {name: "Миграционный прирост", unit: "чел./год", direction: higher_better, subindex: S7, level: municipality, source: "Росстат: демография"}
   F28: {name: "Динамика населения за 5 лет", unit: "%", direction: higher_better, subindex: S7, level: municipality, source: "Росстат: перепись и оценка"}
   F29: {name: "Вновь зарегистрированные юрлица и ИП", unit: "шт/год", direction: higher_better, subindex: S7, level: municipality, source: "ФНС"}

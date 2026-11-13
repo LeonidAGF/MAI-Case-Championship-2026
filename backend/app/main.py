@@ -16,7 +16,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.routes import (
-    ambulance, chat, compare, explain, health, index, knowledge, profiles, reference, territories, v1, whatif,
+    ambulance, chat, climate, compare, explain, health, index, knowledge, profiles, reference, territories, v1, whatif,
 )
 from app.container import Container, build_container
 from app.core.config import Settings, get_settings
@@ -42,6 +42,7 @@ DESCRIPTION = """
 TAGS = [
     {"name": "territories", "description": "Территории СКФО: субъекты, районы, населённые пункты"},
     {"name": "index", "description": "Индекс доступности под профиль"},
+    {"name": "climate", "description": "Условия по сетке NASA POWER за 2025 год"},
     {"name": "explain", "description": "Объяснимость: водопад вкладов и тексты причин"},
     {"name": "compare", "description": "Сравнение side-by-side внутри кластера"},
     {"name": "what-if", "description": "Сценарии W1–W10 и их прогоны"},
@@ -167,7 +168,7 @@ def create_app(container_factory: Callable[[Settings], Container] | None = None)
         return Response(content=body, media_type=content_type)
 
     for module in (
-        health, territories, index, explain, compare, whatif, ambulance, profiles, reference, knowledge, chat, v1,
+        health, territories, index, explain, compare, whatif, ambulance, climate, profiles, reference, knowledge, chat, v1,
     ):
         app.include_router(module.router)
     return app

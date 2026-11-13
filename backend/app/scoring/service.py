@@ -10,10 +10,12 @@ from dataclasses import dataclass, field
 
 import anyio
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from app.core.errors import NotFoundError
 from app.core.metrics import SCORE_CALLS, SCORE_COMPUTE_DURATION
 from app.modelcfg import ModelConfig
+from app.climate.service import ClimateService
 from app.profiles.contract import Profile
 from app.scoring.contract import FeatureSpec, IndexEngine, ScoreRequest, TerritoryScore
 from app.scoring.matrix import MODE_PREFERENCE, ClusterMatrix, DataRevision, MatrixStore, Provenance
@@ -141,6 +143,7 @@ class ScoringService:
         revision: DataRevision,
         *,
         lru_size: int = 8,
+        climate: ClimateService | None = None,
     ) -> None:
         self.cfg = cfg
         self.engine = engine
@@ -153,6 +156,7 @@ class ScoringService:
         self.feature_codes = [f.code for f in self.feature_specs]
         self._lru_size = lru_size
         self._results: OrderedDict[tuple, ClusterScores] = OrderedDict()
+        self.climate = climate
 
     def clear(self) -> None:
         self._results.clear()
@@ -172,7 +176,8 @@ class ScoringService:
         )
 
     def build_request(
-        self, matrix: ClusterMatrix, profile: Profile, targets: Mapping[int, Mapping[str, float | None]]
+        self, matrix: ClusterMatrix, profile: Profile, targets: Mapping[int, Mapping[str, float | None]],
+        climate_matches: Mapping[int, float] | None = None,
     ) -> ScoreRequest:
         return ScoreRequest(
             cluster_code=matrix.cluster_code,
@@ -184,7 +189,23 @@ class ScoringService:
             filters=profile.filters.model_dump(mode="json"),
             reference=matrix.values,
             targets=targets,
+            climate_matches=climate_matches or {},
         )
+
+    async def _climate_matches(
+        self, session: AsyncSession, profile: Profile, territory_ids: list[int]
+    ) -> dict[int, float]:
+        if self.climate is None or not profile.filters.desired_climate or not territory_ids:
+            return {}
+        rows = await session.execute(
+            text("SELECT id, external_id FROM territory WHERE id = ANY(:ids)"), {"ids": territory_ids}
+        )
+        matches = {}
+        for tid, external_id in rows:
+            value = self.climate.match(external_id, profile.filters.desired_climate)
+            if value is not None:
+                matches[tid] = value
+        return matches
 
     async def _run(self, request: ScoreRequest) -> dict[int, TerritoryScore]:
         if not request.targets:
@@ -217,7 +238,8 @@ class ScoringService:
                 tid: overlay.apply(tid, matrix.values[tid], matrix.provenance.get(tid, {}), profile.mode)
                 for tid in matrix.territory_ids
             }
-        scores = await self._run(self.build_request(matrix, profile, targets))
+        matches = await self._climate_matches(session, profile, list(targets))
+        scores = await self._run(self.build_request(matrix, profile, targets, matches))
         result = ClusterScores(cluster_code, profile, matrix, scores, overlay.run_id if overlay else None)
         self._results[key] = result
         while len(self._results) > self._lru_size:
@@ -233,4 +255,5 @@ class ScoringService:
     ) -> dict[int, TerritoryScore]:
         """Score arbitrary (e.g. what-if modified) rows against the cluster's base normalization."""
         matrix = await self.matrix(session, cluster_code, profile.mode)
-        return await self._run(self.build_request(matrix, profile, targets))
+        matches = await self._climate_matches(session, profile, list(targets))
+        return await self._run(self.build_request(matrix, profile, targets, matches))

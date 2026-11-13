@@ -45,6 +45,8 @@ class ScoreRequest:
     reference: Matrix
     # Rows to score (the same matrix, a subset, or what-if modified copies).
     targets: Matrix
+    # 2025 seasonal match in 0..1. Empty when no desired climate was selected.
+    climate_matches: Mapping[int, float] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -64,6 +66,8 @@ class TerritoryScore:
     subindices: dict[str, float | None]
     attractiveness: float | None
     components: list[ComponentScore] = field(default_factory=list)
+    climate_match: float | None = None
+    climate_adjustment_points: float = 0.0
 
 
 @runtime_checkable
