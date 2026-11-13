@@ -210,6 +210,65 @@ export interface WhatIfResponse {
 	profile: any;
 }
 
+export type AmbulanceNormStatus = 'met' | 'borderline' | 'not_met';
+
+export interface AmbulanceEstimate {
+	minutes: number;
+	minutes_low: number;
+	minutes_high: number;
+	travel_minutes: number;
+	dispatch_minutes: number;
+	norm_minutes: number;
+	norm_status: AmbulanceNormStatus;
+}
+
+export interface AmbulanceBase {
+	external_id: string;
+	name: string | null;
+	category: string;
+	category_label: string;
+	location: Point;
+	access_m: number;
+}
+
+export interface AmbulanceRoute {
+	distance_km: number | null;
+	flat_minutes: number | null;
+	terrain_minutes: number | null;
+	climb_m: number | null;
+	descent_m: number | null;
+	max_height_m: number | null;
+	steep_km: number | null;
+	urban_km: number;
+	osm_speed_km: number;
+	no_terrain_km: number;
+	access_m: number;
+}
+
+export interface AmbulanceSettlement {
+	territory_id: number;
+	name: string;
+	region_code: string | null;
+	region_name: string | null;
+	municipality_id: number | null;
+	municipality_name: string | null;
+	cluster: string | null;
+	population: number | null;
+	location: Point | null;
+	elevation_m: number | null;
+	available: boolean;
+	estimate: AmbulanceEstimate | null;
+	base: AmbulanceBase | null;
+	route: AmbulanceRoute | null;
+	reason: string | null;
+	flags: string[];
+	text: string;
+	notes: string[];
+	model_version: string;
+	computed_at: string | null;
+	stale: boolean;
+}
+
 export async function fetchIndex(territoryId: number, p: Profile) {
 	const q = new URLSearchParams({ territory_id: String(territoryId), p: encodeProfile(p) });
 	return json<IndexSingle>(await fetch(`${API}/index?${q}`));
@@ -304,4 +363,8 @@ export async function streamChat(
 	}
 	buffer += decoder.decode();
 	if (buffer.trim()) consume(buffer);
+}
+
+export async function fetchAmbulanceSettlement(territoryId: number) {
+	return json<AmbulanceSettlement>(await fetch(`${API}/ambulance/settlements/${territoryId}`));
 }
